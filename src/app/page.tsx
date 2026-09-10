@@ -998,6 +998,8 @@ export default function KaamSetuApp() {
         loading={loading}
         preSelectedSkillId={preSelectedWorker?.skills[0]?.id}
         preSelectedWorkerName={preSelectedWorker?.name}
+        userLocality={userLocation.locality}
+        userCoordinates={userLocation.isLive ? { latitude: userLocation.lat, longitude: userLocation.lng } : null}
       />
 
       {/* 6. MODAL: APPLICANT REVIEW SHEET */}
