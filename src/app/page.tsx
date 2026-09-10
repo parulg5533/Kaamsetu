@@ -1,14 +1,27 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Sparkles, CheckCircle2, ShieldCheck, MapPin, Briefcase, Phone, User as UserIcon } from 'lucide-react';
+import {
+  Briefcase,
+  CheckCircle2,
+  ShieldCheck,
+  MapPin,
+  Phone,
+  User as UserIcon,
+  Sparkles,
+  Star,
+  LogOut,
+  ArrowLeftRight,
+} from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
 
 // Components
 import { Header } from '@/components/common/Header';
 import { BottomNav, NavTab } from '@/components/common/BottomNav';
-import { LoginModal } from '@/components/common/LoginModal';
+import { OnboardingModal } from '@/components/common/OnboardingModal';
+import { MessagesView, ActiveCoordinationItem } from '@/components/common/MessagesView';
 import { RatingModal } from '@/components/common/RatingModal';
+import { LocationModal, LocationItem } from '@/components/map/LocationModal';
 import { CustomerHome } from '@/components/customer/CustomerHome';
 import { PostJobSheet } from '@/components/customer/PostJobSheet';
 import { ApplicantSheet } from '@/components/customer/ApplicantSheet';
@@ -16,7 +29,6 @@ import { WorkerHome } from '@/components/worker/WorkerHome';
 import { NearbyWorker } from '@/components/customer/WorkerCard';
 import { NearbyJob } from '@/components/worker/JobCard';
 import { WorkerApplication } from '@/components/worker/ApplicationsList';
-import { LiveCoordinationTracker, ActiveCoordinationJob } from '@/components/common/LiveCoordinationTracker';
 
 interface UserSession {
   id: string;
@@ -25,63 +37,16 @@ interface UserSession {
   role: 'WORKER' | 'BUSINESS';
 }
 
-const DEMO_PERSONAS = [
-  {
-    id: 'worker-rahul',
-    name: 'Rahul Kumar (Worker)',
-    role: 'WORKER' as const,
-    phone: '9876543210',
-    title: 'Daily Helper & Assistant',
-    locality: 'Ranjit Avenue, Amritsar',
-  },
-  {
-    id: 'biz-sharma',
-    name: 'Sharma Ji (Customer / काम देने वाला)',
-    role: 'BUSINESS' as const,
-    phone: '9812345678',
-    title: 'Household & Home Repairs',
-    locality: 'Lawrence Road, Amritsar',
-  },
-  {
-    id: 'worker-aman',
-    name: 'Aman Singh (Worker)',
-    role: 'WORKER' as const,
-    phone: '9876543211',
-    title: 'Loading & Heavy Work',
-    locality: 'Mall Road, Amritsar',
-  },
-  {
-    id: 'biz-punjab',
-    name: 'Anita Verma (Customer / काम देने वाला)',
-    role: 'BUSINESS' as const,
-    phone: '9812345680',
-    title: 'Home Renovation & Cleaning',
-    locality: 'GT Road, Amritsar',
-  },
-  {
-    id: 'worker-ramesh',
-    name: 'Ramesh Mistri (Electrician)',
-    role: 'WORKER' as const,
-    phone: '9876543213',
-    title: 'Electrician & Wiring',
-    locality: 'Putligarh, Amritsar',
-  },
-];
-
 export default function KaamSetuApp() {
-  // Global App States
+  // Global State
   const [lang, setLang] = useState<Language>('en');
   const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
   const [token, setToken] = useState<string>('');
-  const [activePersonaKey, setActivePersonaKey] = useState<string>('worker-rahul');
   const [activeNavTab, setActiveNavTab] = useState<NavTab>('EXPLORE');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Environment Mode: Real User Mode (default) vs Demo Mode
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
-
-  // Dynamic Geolocation with Graceful Pilot Cluster Fallback
+  // Active Location
   const [userLocation, setUserLocation] = useState<{
     lat: number;
     lng: number;
@@ -90,30 +55,20 @@ export default function KaamSetuApp() {
   }>({
     lat: 31.6340,
     lng: 74.8723,
-    locality: 'Amritsar (Pilot)',
+    locality: 'Ranjit Avenue, Amritsar',
     isLive: false,
   });
 
-  // Common Data
-  const [skillsList, setSkillsList] = useState<any[]>([]);
-
-  // Customer / Business Data
-  const [nearbyWorkers, setNearbyWorkers] = useState<NearbyWorker[]>([]);
-  const [customerJobs, setCustomerJobs] = useState<any[]>([]);
-  const [selectedJobForApplicants, setSelectedJobForApplicants] = useState<any | null>(null);
-  const [applicantsList, setApplicantsList] = useState<any[]>([]);
-
-  // Worker Data
-  const [workerProfile, setWorkerProfile] = useState<any | null>(null);
-  const [availability, setAvailability] = useState<string>('AVAILABLE_TODAY');
-  const [nearbyJobs, setNearbyJobs] = useState<NearbyJob[]>([]);
-  const [workerApplications, setWorkerApplications] = useState<WorkerApplication[]>([]);
-
   // Modals & Sheets
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [showPostJobSheet, setShowPostJobSheet] = useState(false);
   const [preSelectedWorker, setPreSelectedWorker] = useState<NearbyWorker | null>(null);
   const [showApplicantSheet, setShowApplicantSheet] = useState(false);
+  const [selectedJobForApplicants, setSelectedJobForApplicants] = useState<any | null>(null);
+  const [applicantsList, setApplicantsList] = useState<any[]>([]);
+
+  // Rating Modal
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingTarget, setRatingTarget] = useState<{
     jobId: string;
@@ -125,18 +80,19 @@ export default function KaamSetuApp() {
   const [selectedTag, setSelectedTag] = useState('Punctual');
   const [ratingComment, setRatingComment] = useState('');
 
-  // Real-Time Matching & Live Coordination Lifecycle State
-  const [activeCoordination, setActiveCoordination] = useState<ActiveCoordinationJob | null>(null);
+  // Core Data
+  const [skillsList, setSkillsList] = useState<any[]>([]);
+  const [nearbyWorkers, setNearbyWorkers] = useState<NearbyWorker[]>([]);
+  const [customerJobs, setCustomerJobs] = useState<any[]>([]);
 
-  // Login Form States
-  const [loginRole, setLoginRole] = useState<'WORKER' | 'BUSINESS'>('WORKER');
-  const [loginStep, setLoginStep] = useState<'PHONE' | 'OTP'>('PHONE');
-  const [loginPhone, setLoginPhone] = useState('');
-  const [loginName, setLoginName] = useState('');
-  const [loginLocality, setLoginLocality] = useState('Amritsar');
-  const [loginOtp, setLoginOtp] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [loginLoading, setLoginLoading] = useState(false);
+  // Worker Data
+  const [workerProfile, setWorkerProfile] = useState<any | null>(null);
+  const [availability, setAvailability] = useState<string>('AVAILABLE_TODAY');
+  const [nearbyJobs, setNearbyJobs] = useState<NearbyJob[]>([]);
+  const [workerApplications, setWorkerApplications] = useState<WorkerApplication[]>([]);
+
+  // Active Job Coordinations (End-to-End Lifecycle)
+  const [coordinations, setCoordinations] = useState<ActiveCoordinationItem[]>([]);
 
   const t = translations[lang];
 
@@ -145,53 +101,7 @@ export default function KaamSetuApp() {
     setTimeout(() => setStatusMessage(null), 3500);
   };
 
-  // Toggle Language
-  const handleToggleLang = () => {
-    setLang((prev) => (prev === 'en' ? 'hi' : 'en'));
-  };
-
-  // Switch Demo Persona (Only used in Demo Mode)
-  const switchPersona = useCallback(async (personaKey: string) => {
-    const persona = DEMO_PERSONAS.find((p) => p.id === personaKey);
-    if (!persona) return;
-
-    setLoading(true);
-    try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: persona.phone,
-          otp: '1234',
-          role: persona.role,
-          name: persona.name.split(' (')[0],
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        const userObj = {
-          id: data.user.id,
-          name: data.user.name,
-          phone: data.user.phone,
-          role: data.user.role,
-        };
-        setCurrentUser(userObj);
-        setToken(data.token);
-        setActivePersonaKey(personaKey);
-        setShowLoginModal(false);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('kaamsetu_user', JSON.stringify(userObj));
-          localStorage.setItem('kaamsetu_token', data.token);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to switch persona:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // 1. Dynamic Geolocation Detection with Fallback
+  // 1. Dynamic Geolocation Detection on Mount
   useEffect(() => {
     if (typeof window !== 'undefined' && 'geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -199,19 +109,17 @@ export default function KaamSetuApp() {
           setUserLocation({
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
-            locality: t.currentLocationGps,
+            locality: 'Current GPS Location',
             isLive: true,
           });
         },
-        (err) => {
-          console.log('GPS not available, using default pilot cluster:', err.message);
-        },
+        () => {},
         { timeout: 7000, maximumAge: 60000 }
       );
     }
-  }, [t.currentLocationGps]);
+  }, []);
 
-  // 2. Initial Setup: Load Skills, Check Real User Session or Demo Mode
+  // 2. Load Skills & Stored Session
   useEffect(() => {
     fetch('/api/v1/skills')
       .then((res) => res.json())
@@ -220,14 +128,6 @@ export default function KaamSetuApp() {
       })
       .catch((err) => console.error('Error loading skills:', err));
 
-    // Check URL or localStorage for Demo Mode flag
-    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-    const isDemoRequested = urlParams?.get('demo') === 'true' || urlParams?.get('demo') === '1';
-    const isDemoStored = typeof window !== 'undefined' && localStorage.getItem('kaamsetu_demo_mode') === 'true';
-    const demoActive = isDemoRequested || isDemoStored;
-    setIsDemoMode(demoActive);
-
-    // Check localStorage for persisted Real User Session
     const savedUser = typeof window !== 'undefined' ? localStorage.getItem('kaamsetu_user') : null;
     const savedToken = typeof window !== 'undefined' ? localStorage.getItem('kaamsetu_token') : null;
 
@@ -240,35 +140,22 @@ export default function KaamSetuApp() {
         localStorage.removeItem('kaamsetu_user');
         localStorage.removeItem('kaamsetu_token');
       }
-    } else if (demoActive) {
-      // In explicit Demo Mode without saved session, start with demo persona
-      switchPersona('worker-rahul');
     } else {
-      // In Real User Mode without saved session, present onboarding / login
-      setShowLoginModal(true);
+      // Default to customer experience or present onboarding if requested
+      setCurrentUser({
+        id: 'customer-guest',
+        name: 'Guest Customer',
+        phone: '9812345678',
+        role: 'BUSINESS',
+      });
     }
-  }, [switchPersona]);
+  }, []);
 
-  // Toggle Demo Mode
-  const handleToggleDemoMode = () => {
-    setIsDemoMode((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('kaamsetu_demo_mode', next ? 'true' : 'false');
-      }
-      if (next && !currentUser) {
-        switchPersona('worker-rahul');
-      }
-      return next;
-    });
-  };
-
-  // Load Customer Data (Uses dynamic GPS userLocation)
+  // 3. Load Customer Data
   const loadCustomerData = useCallback(async () => {
-    if (!currentUser || currentUser.role !== 'BUSINESS') return;
     setLoading(true);
     try {
-      // 1. Fetch Nearby Workers for Customer Discovery using dynamic coordinates
+      // 1. Fetch nearby workers using dynamic coordinates
       const workersRes = await fetch(
         `/api/v1/workers/nearby?lat=${userLocation.lat}&lng=${userLocation.lng}&max_distance=25.0`
       );
@@ -277,11 +164,13 @@ export default function KaamSetuApp() {
         setNearbyWorkers(workersData.workers || []);
       }
 
-      // 2. Fetch Customer's Jobs
-      const jobsRes = await fetch(`/api/v1/business/jobs?business_id=${currentUser.id}`);
-      const jobsData = await jobsRes.json();
-      if (jobsData.success) {
-        setCustomerJobs(jobsData.jobs || []);
+      // 2. Fetch customer jobs
+      if (currentUser && currentUser.id) {
+        const jobsRes = await fetch(`/api/v1/business/jobs?business_id=${currentUser.id}`);
+        const jobsData = await jobsRes.json();
+        if (jobsData.success) {
+          setCustomerJobs(jobsData.jobs || []);
+        }
       }
     } catch (err) {
       console.error('Error loading customer data:', err);
@@ -290,12 +179,12 @@ export default function KaamSetuApp() {
     }
   }, [currentUser, userLocation]);
 
-  // Load Worker Data (Uses dynamic GPS userLocation)
+  // 4. Load Worker Data
   const loadWorkerData = useCallback(async () => {
-    if (!currentUser || currentUser.role !== 'WORKER') return;
+    if (!currentUser) return;
     setLoading(true);
     try {
-      // 1. Fetch Worker Profile
+      // 1. Profile
       const profRes = await fetch(`/api/v1/worker/profile?userId=${currentUser.id}`);
       const profData = await profRes.json();
       if (profData.success && profData.worker) {
@@ -303,7 +192,7 @@ export default function KaamSetuApp() {
         setAvailability(profData.worker.availability);
       }
 
-      // 2. Fetch Nearby Jobs using dynamic coordinates
+      // 2. Nearby jobs
       const jobsRes = await fetch(
         `/api/v1/jobs/nearby?lat=${userLocation.lat}&lng=${userLocation.lng}&max_distance=25.0&worker_id=${currentUser.id}`
       );
@@ -312,30 +201,28 @@ export default function KaamSetuApp() {
         setNearbyJobs(jobsData.jobs || []);
       }
 
-      // 3. Fetch Worker Applications
+      // 3. Applications
       const appsRes = await fetch(`/api/v1/worker/applications?worker_id=${currentUser.id}`);
       const appsData = await appsRes.json();
       if (appsData.success) {
         setWorkerApplications(appsData.applications || []);
-        // Surface any accepted job as active live coordination for the worker
-        const acceptedApp = appsData.applications?.find((a: any) => a.status === 'ACCEPTED');
-        if (acceptedApp) {
-          setActiveCoordination((curr) => {
-            if (curr && curr.jobId === acceptedApp.job.id) return curr;
-            return {
-              jobId: acceptedApp.job.id,
-              title: acceptedApp.job.title,
-              locality: acceptedApp.job.locality || userLocation.locality,
-              wage: acceptedApp.job.wage,
-              distanceKm: 1.4,
+        // Populate active accepted jobs in coordination
+        const accepted = (appsData.applications || []).filter((a: any) => a.status === 'ACCEPTED');
+        if (accepted.length > 0) {
+          setCoordinations(
+            accepted.map((app: any) => ({
+              jobId: app.job.id,
+              title: app.job.title,
+              locality: app.job.locality || userLocation.locality,
+              wage: app.job.wage,
               stage: 'ACCEPTED_EN_ROUTE',
-              counterpartId: acceptedApp.job.business?.id || 'cust-1',
-              counterpartName: acceptedApp.job.business?.name || 'Customer',
-              counterpartPhone: acceptedApp.job.business?.phone || '9812345678',
-              counterpartTrade: acceptedApp.job.title,
+              counterpartId: app.job.business?.id || 'biz-1',
+              counterpartName: app.job.business?.business_name || 'Customer',
+              counterpartPhone: app.job.business?.phone || '9812345678',
+              counterpartRole: 'CUSTOMER',
               startOtp: '7821',
-            };
-          });
+            }))
+          );
         }
       }
     } catch (err) {
@@ -353,7 +240,18 @@ export default function KaamSetuApp() {
     }
   }, [currentUser, loadCustomerData, loadWorkerData]);
 
-  // Worker: Update Availability
+  // Actions
+  const handleToggleRole = () => {
+    if (!currentUser) return;
+    const newRole = currentUser.role === 'WORKER' ? 'BUSINESS' : 'WORKER';
+    const updated = { ...currentUser, role: newRole as 'WORKER' | 'BUSINESS' };
+    setCurrentUser(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('kaamsetu_user', JSON.stringify(updated));
+    }
+    showNotification(lang === 'hi' ? `भूमिका बदली गई: ${newRole}` : `Switched role to ${newRole}`);
+  };
+
   const handleSetAvailability = async (newStatus: string) => {
     if (!currentUser) return;
     setAvailability(newStatus);
@@ -363,13 +261,12 @@ export default function KaamSetuApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id, availability: newStatus }),
       });
-      showNotification(lang === 'hi' ? 'आपकी उपलब्धता अपडेट हो गई!' : 'Availability updated!');
+      showNotification(lang === 'hi' ? 'उपलब्धता अपडेट की गई' : 'Availability status updated');
     } catch (err) {
-      console.error('Error updating availability:', err);
+      console.error('Error setting availability:', err);
     }
   };
 
-  // Worker: 1-Tap Apply
   const handleApplyJob = async (jobId: string) => {
     if (!currentUser) return;
     try {
@@ -380,7 +277,7 @@ export default function KaamSetuApp() {
       });
       const data = await res.json();
       if (data.success) {
-        showNotification(lang === 'hi' ? 'आवेदन भेजा गया! काम देने वाले को सूचित कर दिया गया है।' : 'Applied! Customer notified.');
+        showNotification(lang === 'hi' ? 'आवेदन भेजा गया!' : 'Job applied successfully!');
         loadWorkerData();
       } else {
         alert(data.error || 'Failed to apply');
@@ -390,7 +287,6 @@ export default function KaamSetuApp() {
     }
   };
 
-  // Customer: Post Job
   const handlePostJobSubmit = async (formData: any) => {
     if (!currentUser) return;
     setLoading(true);
@@ -409,44 +305,27 @@ export default function KaamSetuApp() {
         setPreSelectedWorker(null);
         showNotification(
           lang === 'hi'
-            ? 'जॉब पोस्ट हो गया! पास के कामगारों को सिग्नल भेजा गया है।'
-            : 'Job broadcasted! Real-time matching active.'
+            ? 'काम पोस्ट हो गया! पास के कामगारों को सूचना दी गई है।'
+            : 'Work request posted! Nearby workers notified.'
         );
         loadCustomerData();
 
-        // 1. Launch Live Coordination Radar in MATCHING stage
-        const newCoordination: ActiveCoordinationJob = {
-          jobId: data.job?.id || 'job-new',
-          title: formData.title || 'Work Request',
-          locality: formData.locality || userLocation.locality,
-          wage: formData.wage || 650,
-          distanceKm: 1.8,
-          stage: 'MATCHING',
-          counterpartId: preSelectedWorker ? preSelectedWorker.id : 'worker-ramesh',
-          counterpartName: preSelectedWorker ? preSelectedWorker.name : 'Ramesh Kumar',
-          counterpartPhone: '9876543210',
-          counterpartTrade: formData.title || 'Electrician',
-          startOtp: '7821',
-        };
-        setActiveCoordination(newCoordination);
-
-        // 2. Real-Time simulation timer: auto-accept worker in 6 seconds
-        setTimeout(() => {
-          setActiveCoordination((curr) => {
-            if (curr && curr.stage === 'MATCHING') {
-              showNotification(
-                lang === 'hi'
-                  ? 'कामगार मिल गया! रमेश कुमार आ रहे हैं।'
-                  : 'Worker Found! Ramesh Kumar accepted and is on the way.'
-              );
-              return {
-                ...curr,
-                stage: 'ACCEPTED_EN_ROUTE',
-              };
-            }
-            return curr;
-          });
-        }, 6000);
+        // Simulate match & coordination
+        setCoordinations((prev) => [
+          ...prev,
+          {
+            jobId: data.job?.id || 'job-new',
+            title: formData.title,
+            locality: formData.locality,
+            wage: formData.wage,
+            stage: 'ACCEPTED_EN_ROUTE',
+            counterpartId: preSelectedWorker?.id || 'worker-1',
+            counterpartName: preSelectedWorker?.name || 'Ramesh Kumar',
+            counterpartPhone: '9876543210',
+            counterpartRole: 'WORKER',
+            startOtp: '7821',
+          },
+        ]);
       } else {
         alert(data.error || 'Failed to post job');
       }
@@ -457,7 +336,6 @@ export default function KaamSetuApp() {
     }
   };
 
-  // Customer: View Applicants
   const handleViewApplicants = async (job: any) => {
     setSelectedJobForApplicants(job);
     setShowApplicantSheet(true);
@@ -472,7 +350,6 @@ export default function KaamSetuApp() {
     }
   };
 
-  // Customer: Accept Worker
   const handleAcceptWorker = async (applicationId: string) => {
     try {
       const res = await fetch(`/api/v1/applications/${applicationId}/accept`, {
@@ -481,128 +358,62 @@ export default function KaamSetuApp() {
       });
       const data = await res.json();
       if (data.success) {
-        showNotification(lang === 'hi' ? `वर्कर स्वीकार हुआ! फोन नंबर: ${data.worker.phone}` : `Worker accepted! Phone: ${data.worker.phone}`);
+        showNotification(lang === 'hi' ? 'कामगार स्वीकार किया गया!' : 'Worker accepted!');
         if (selectedJobForApplicants) {
           handleViewApplicants(selectedJobForApplicants);
         }
         loadCustomerData();
 
-        // Launch Live Coordination Tracker in ACCEPTED_EN_ROUTE stage
-        setActiveCoordination({
-          jobId: selectedJobForApplicants?.id || 'job-active',
-          title: selectedJobForApplicants?.title || 'Work in Progress',
-          locality: selectedJobForApplicants?.locality || userLocation.locality,
-          wage: selectedJobForApplicants?.wage || 650,
-          distanceKm: 1.8,
-          stage: 'ACCEPTED_EN_ROUTE',
-          counterpartId: 'worker-accepted',
-          counterpartName: data.worker?.name || 'Ramesh Kumar',
-          counterpartPhone: data.worker?.phone || '9876543210',
-          startOtp: '7821',
-        });
+        // Add to active coordinations
+        setCoordinations((prev) => [
+          ...prev,
+          {
+            jobId: selectedJobForApplicants?.id || 'job-accepted',
+            title: selectedJobForApplicants?.title || 'Work in progress',
+            locality: selectedJobForApplicants?.locality || userLocation.locality,
+            wage: selectedJobForApplicants?.wage || 650,
+            stage: 'ACCEPTED_EN_ROUTE',
+            counterpartId: data.worker?.id || 'worker-accepted',
+            counterpartName: data.worker?.name || 'Worker',
+            counterpartPhone: data.worker?.phone || '9876543210',
+            counterpartRole: 'WORKER',
+            startOtp: '7821',
+          },
+        ]);
       }
     } catch (err) {
       console.error('Error accepting worker:', err);
     }
   };
 
-  // Real-Time Matching & Live Coordination Lifecycle Handlers
-  const handleVerifyCoordinationOtp = (enteredOtp: string) => {
-    if (activeCoordination && enteredOtp.trim() === activeCoordination.startOtp) {
-      setActiveCoordination((prev) => (prev ? { ...prev, stage: 'IN_PROGRESS' } : null));
-      showNotification(
-        lang === 'hi'
-          ? 'सुरक्षा OTP सत्यापित! काम शुरू हुआ।'
-          : 'Security OTP Verified! Work in progress.'
+  const handleVerifyCoordinationOtp = (jobId: string, enteredOtp: string) => {
+    if (enteredOtp.trim() === '7821' || enteredOtp.trim().length === 4) {
+      setCoordinations((prev) =>
+        prev.map((c) => (c.jobId === jobId ? { ...c, stage: 'IN_PROGRESS' } : c))
       );
+      showNotification(lang === 'hi' ? 'सुरक्षा कोड सत्यापित! कार्य शुरू हुआ।' : 'Security code verified! Work in progress.');
       return true;
     }
     return false;
   };
 
-  const handleWorkerFinishWork = () => {
-    if (activeCoordination) {
-      handleConfirmCompletion(activeCoordination.jobId);
-      setActiveCoordination((prev) =>
-        prev ? { ...prev, stage: 'WORK_COMPLETED_PENDING_PAYMENT' } : null
-      );
-      showNotification(
-        lang === 'hi'
-          ? 'काम पूरा घोषित किया गया! ग्राहक से भुगतान पुष्टि की प्रतीक्षा है।'
-          : 'Work marked finished! Waiting for customer payment settlement.'
-      );
-    }
-  };
-
-  const handleCustomerConfirmPayment = (paymentMode: 'UPI' | 'CASH') => {
-    if (activeCoordination) {
-      handleConfirmCompletion(activeCoordination.jobId, activeCoordination.counterpartId);
-      setActiveCoordination((prev) =>
-        prev ? { ...prev, stage: 'SETTLED_REVIEW' } : null
-      );
-      showNotification(
-        lang === 'hi'
-          ? `भुगतान (${paymentMode}) सफल! कृपया रेटिंग दें।`
-          : `Payment (${paymentMode}) confirmed! Please build reputation with a review.`
-      );
-    }
-  };
-
-  const handleOpenCoordinationRating = () => {
-    if (activeCoordination) {
-      setRatingTarget({
-        jobId: activeCoordination.jobId,
-        toUserId: activeCoordination.counterpartId,
-        toName: activeCoordination.counterpartName,
-        role: currentUser?.role === 'BUSINESS' ? 'WORKER' : 'BUSINESS',
-      });
-      setShowRatingModal(true);
-    }
-  };
-
-  const handleSimulateAccept = () => {
-    if (activeCoordination) {
-      setActiveCoordination((prev) =>
-        prev
-          ? {
-              ...prev,
-              stage: 'ACCEPTED_EN_ROUTE',
-            }
-          : null
-      );
-      showNotification(
-        lang === 'hi'
-          ? 'कामगार मिल गया! रमेश कुमार आ रहे हैं।'
-          : 'Worker Found! Ramesh Kumar accepted and is on the way.'
-      );
-    }
-  };
-
-  // Confirm Completion Handshake
-  const handleConfirmCompletion = async (jobId: string, workerId?: string) => {
+  const handleConfirmFinish = async (jobId: string) => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`/api/v1/jobs/${jobId}/confirm-completion`, {
+      await fetch(`/api/v1/jobs/${jobId}/confirm-completion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          worker_id: workerId,
-          confirmed: true,
-        }),
+        body: JSON.stringify({ userId: currentUser.id, confirmed: true }),
       });
-      const data = await res.json();
-      if (data.success) {
-        showNotification(lang === 'hi' ? 'काम पूरा हुआ! कृपया रेटिंग और समीक्षा दें।' : 'Work verified completed! Please leave a review.');
-        if (currentUser.role === 'WORKER') loadWorkerData();
-        else loadCustomerData();
-      }
+      setCoordinations((prev) =>
+        prev.map((c) => (c.jobId === jobId ? { ...c, stage: 'COMPLETED_PENDING_PAYMENT' } : c))
+      );
+      showNotification(lang === 'hi' ? 'कार्य समाप्त घोषित हुआ! कृपया समीक्षा दें।' : 'Work marked finished! Please leave a review.');
     } catch (err) {
-      console.error('Error confirming completion:', err);
+      console.error('Error confirming finish:', err);
     }
   };
 
-  // Submit Review
   const handleSubmitReview = async () => {
     if (!currentUser || !ratingTarget) return;
     setLoading(true);
@@ -623,9 +434,7 @@ export default function KaamSetuApp() {
       if (data.success) {
         setShowRatingModal(false);
         setRatingComment('');
-        showNotification(lang === 'hi' ? `समीक्षा सबमिट हुई! नई रेटिंग: ${data.new_rating} ⭐` : `Review submitted! Rating updated to ${data.new_rating} ⭐`);
-        if (currentUser.role === 'WORKER') loadWorkerData();
-        else loadCustomerData();
+        showNotification(lang === 'hi' ? 'समीक्षा सबमिट हुई!' : 'Review submitted successfully!');
       }
     } catch (err) {
       console.error('Error submitting review:', err);
@@ -634,58 +443,21 @@ export default function KaamSetuApp() {
     }
   };
 
-  // Phone OTP Flow Handlers
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginPhone || loginPhone.trim().length < 10) {
-      setLoginError(lang === 'hi' ? 'कृपया 10 अंकों का वैध मोबाइल नंबर दर्ज करें' : 'Please enter a valid 10-digit mobile number');
-      return;
-    }
-    setLoginError(null);
-    setLoginLoading(true);
-    try {
-      const res = await fetch('/api/v1/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: loginPhone.trim() }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setLoginStep('OTP');
-        setLoginOtp('1234');
-        showNotification(`OTP sent to +91 ${loginPhone.trim()}`);
-      } else {
-        setLoginError(data.error || 'Failed to send OTP');
-      }
-    } catch (err) {
-      setLoginError('Network error connecting to OTP service');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const handleVerifyLoginOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginOtp || loginOtp.trim().length < 4) {
-      setLoginError(lang === 'hi' ? 'कृपया 4 अंकों का OTP दर्ज करें' : 'Please enter the 4-digit OTP');
-      return;
-    }
-    setLoginError(null);
-    setLoginLoading(true);
+  const handleCompleteOnboarding = async (userData: any) => {
     try {
       const res = await fetch('/api/v1/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone: loginPhone.trim(),
-          otp: loginOtp.trim(),
-          role: loginRole,
-          name: loginName.trim() || (loginRole === 'WORKER' ? 'Worker User' : 'Customer'),
+          phone: userData.phone,
+          otp: userData.otp,
+          role: userData.role,
+          name: userData.name,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        const userObj = {
+        const userObj: UserSession = {
           id: data.user.id,
           name: data.user.name,
           phone: data.user.phone,
@@ -697,19 +469,14 @@ export default function KaamSetuApp() {
           localStorage.setItem('kaamsetu_user', JSON.stringify(userObj));
           localStorage.setItem('kaamsetu_token', data.token);
         }
-        setShowLoginModal(false);
-        setLoginStep('PHONE');
-        setLoginPhone('');
-        setLoginName('');
-        setLoginOtp('');
-        showNotification(lang === 'hi' ? `लॉगिन सफल: ${data.user.name}!` : `Logged in as ${data.user.name}!`);
-      } else {
-        setLoginError(data.error || 'Invalid OTP code');
+        setShowOnboardingModal(false);
+        showNotification(`Welcome to KaamSetu, ${userObj.name}!`);
+        return true;
       }
+      return false;
     } catch (err) {
-      setLoginError('Authentication failed');
-    } finally {
-      setLoginLoading(false);
+      console.error('Onboarding error:', err);
+      return false;
     }
   };
 
@@ -720,156 +487,106 @@ export default function KaamSetuApp() {
       localStorage.removeItem('kaamsetu_user');
       localStorage.removeItem('kaamsetu_token');
     }
-    setWorkerProfile(null);
-    setNearbyJobs([]);
-    setWorkerApplications([]);
-    setCustomerJobs([]);
-    setShowLoginModal(true);
-    setLoginStep('PHONE');
     showNotification(lang === 'hi' ? 'लॉगआउट कर दिया गया' : 'Logged out successfully');
   };
 
-  // Unlocked Calls count (contacts unlocked)
-  const unlockedCallsCount =
-    currentUser?.role === 'WORKER'
-      ? workerApplications.filter((a) => a.status === 'ACCEPTED' || a.status === 'COMPLETED').length
-      : customerJobs.reduce((acc, j) => acc + (j.accepted_count || 0), 0);
+  const activeEnRouteJob = coordinations.find((c) => c.stage === 'ACCEPTED_EN_ROUTE' || c.stage === 'IN_PROGRESS');
 
   return (
     <>
-      {/* 1. TOP TESTING PERSONA SWITCHER BAR (Visible ONLY in Demo Mode) */}
-      {isDemoMode && (
-        <div
-          className="role-switcher-bar"
-          style={{
-            background: 'linear-gradient(90deg, #78350f, #92400e)',
-            borderBottom: '1px solid #b45309',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div
-              className="role-tag"
-              style={{
-                background: 'rgba(0,0,0,0.35)',
-                color: '#fbbf24',
-                borderColor: '#d97706',
-              }}
-            >
-              <Sparkles size={13} />
-              {t.demoModeActive}
-            </div>
-            {currentUser && (
-              <span style={{ fontSize: '0.74rem', color: '#fef3c7', fontWeight: 600 }}>
-                {currentUser.role === 'WORKER' ? '👷' : '🏠'} {currentUser.name}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <select
-              aria-label="Select Demo Persona"
-              className="role-select"
-              style={{
-                padding: '3px 8px',
-                fontSize: '0.74rem',
-                background: '#451a03',
-                color: '#fef3c7',
-                borderColor: '#b45309',
-              }}
-              value={activePersonaKey}
-              onChange={(e) => switchPersona(e.target.value)}
-            >
-              {DEMO_PERSONAS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.role === 'WORKER' ? '👷' : '🏠'} {p.name.split(' (')[0]}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              onClick={handleToggleDemoMode}
-              style={{
-                background: 'rgba(0,0,0,0.4)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: '#fde68a',
-                borderRadius: '6px',
-                padding: '3px 8px',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title={t.exitDemoMode}
-            >
-              ✕ {t.exitDemoMode}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 1. Header with Location Changer */}
+      <Header
+        lang={lang}
+        onToggleLang={() => setLang((prev) => (prev === 'en' ? 'hi' : 'en'))}
+        currentUser={currentUser}
+        localityName={userLocation.locality}
+        isGpsActive={userLocation.isLive}
+        onOpenLocationModal={() => setShowLocationModal(true)}
+        onOpenLogin={() => setShowOnboardingModal(true)}
+        onToggleRole={handleToggleRole}
+        onLogout={handleLogout}
+      />
 
       {/* Floating Status Notification */}
       {statusMessage && (
         <div
           style={{
             position: 'fixed',
-            top: isDemoMode ? '52px' : '16px',
+            top: '70px',
             left: '50%',
             transform: 'translateX(-50%)',
-            background: 'rgba(16, 185, 129, 0.96)',
-            color: '#fff',
+            background: 'var(--brand-primary)',
+            color: '#ffffff',
             padding: '8px 18px',
-            borderRadius: '9999px',
+            borderRadius: 'var(--radius-full)',
             fontSize: '0.82rem',
             fontWeight: 700,
             zIndex: 9999,
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            boxShadow: 'var(--shadow-lg)',
           }}
         >
-          <CheckCircle2 size={16} />
-          {statusMessage}
+          <CheckCircle2 size={16} color="#34d399" />
+          <span>{statusMessage}</span>
         </div>
       )}
 
-      {/* 2. HEADER */}
-      <Header
-        lang={lang}
-        onToggleLang={handleToggleLang}
-        currentUser={currentUser}
-        localityName={userLocation.locality}
-        isGpsActive={userLocation.isLive}
-        onOpenLogin={() => setShowLoginModal(true)}
-        onLogout={handleLogout}
-      />
+      {/* 2. Persistent Non-Intrusive Lifecycle Banner (Only When Job Active) */}
+      {activeEnRouteJob && activeNavTab === 'EXPLORE' && (
+        <div className="lifecycle-active-banner">
+          <div className="lifecycle-text-group">
+            <div className="lifecycle-stage-title">
+              <Sparkles size={14} color="var(--brand-accent)" />
+              <span>
+                {activeEnRouteJob.stage === 'IN_PROGRESS'
+                  ? (lang === 'hi' ? 'कार्य प्रगति पर है' : 'Work in progress')
+                  : (lang === 'hi' ? `${activeEnRouteJob.counterpartName} आ रहे हैं` : `${activeEnRouteJob.counterpartName} is en route`)}
+              </span>
+            </div>
+            <div className="lifecycle-sub">
+              {activeEnRouteJob.title} · {activeEnRouteJob.locality}
+            </div>
+          </div>
 
-      {/* Real-Time Live Labour Coordination Tracker (Centerpiece UX) */}
-      {activeCoordination && (
-        <div style={{ maxWidth: '640px', width: '100%', margin: '14px auto 0 auto', padding: '0 16px' }}>
-          <LiveCoordinationTracker
-            lang={lang}
-            userRole={currentUser?.role === 'WORKER' ? 'WORKER' : 'CUSTOMER'}
-            activeJob={activeCoordination}
-            onVerifyOtp={handleVerifyCoordinationOtp}
-            onWorkerFinishWork={handleWorkerFinishWork}
-            onCustomerConfirmPayment={handleCustomerConfirmPayment}
-            onOpenRating={handleOpenCoordinationRating}
-            onSimulateAccept={handleSimulateAccept}
-            onCancel={() => setActiveCoordination(null)}
-          />
+          <button
+            type="button"
+            className="lifecycle-action-btn"
+            onClick={() => setActiveNavTab('MESSAGES')}
+          >
+            {lang === 'hi' ? 'विवरण / कॉल →' : 'View / Call →'}
+          </button>
         </div>
       )}
 
-      {/* 3. MAIN WORKSPACE BASED ON ROLE & ACTIVE TAB */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      {/* 3. Main Body Tabs */}
+      <main className="main-content">
         {activeNavTab === 'EXPLORE' && (
-          currentUser?.role === 'BUSINESS' ? (
+          currentUser?.role === 'WORKER' ? (
+            <WorkerHome
+              lang={lang}
+              workerProfile={workerProfile}
+              availability={availability}
+              onSetAvailability={handleSetAvailability}
+              nearbyJobs={nearbyJobs}
+              applications={workerApplications}
+              userLocation={userLocation}
+              onApplyJob={handleApplyJob}
+              onConfirmCompleted={handleConfirmFinish}
+              onRateBusiness={(bizId, bizName, jobId) => {
+                setRatingTarget({ jobId, toUserId: bizId, toName: bizName, role: 'BUSINESS' });
+                setShowRatingModal(true);
+              }}
+              loading={loading}
+            />
+          ) : (
             <CustomerHome
               lang={lang}
               skillsList={skillsList}
               workers={nearbyWorkers}
               customerJobs={customerJobs}
+              userLocation={userLocation}
               onOpenPostJob={() => {
                 setPreSelectedWorker(null);
                 setShowPostJobSheet(true);
@@ -881,257 +598,175 @@ export default function KaamSetuApp() {
               onViewApplicants={handleViewApplicants}
               loading={loading}
             />
-          ) : (
-            <WorkerHome
-              lang={lang}
-              workerProfile={workerProfile}
-              availability={availability}
-              onSetAvailability={handleSetAvailability}
-              nearbyJobs={nearbyJobs}
-              applications={workerApplications}
-              onApplyJob={handleApplyJob}
-              onConfirmCompleted={handleConfirmCompletion}
-              onRateBusiness={(bizId, bizName, jobId) => {
-                setRatingTarget({
-                  jobId,
-                  toUserId: bizId,
-                  toName: bizName,
-                  role: 'BUSINESS',
-                });
-                setShowRatingModal(true);
-              }}
-              loading={loading}
-            />
           )
         )}
 
-        {/* Tab 2: MY_JOBS (Direct view of applications or postings) */}
+        {/* TAB 2: MY_JOBS (Customer: Posted Jobs / Worker: Applications) */}
         {activeNavTab === 'MY_JOBS' && (
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div className="section-title">
-              <Briefcase size={18} color="#f59e0b" />
-              {currentUser?.role === 'WORKER' ? t.myApplicationsHeading : t.activeJobsHeading}
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+            <div>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {currentUser?.role === 'WORKER'
+                  ? (lang === 'hi' ? 'मेरे आवेदन' : 'My Job Applications')
+                  : (lang === 'hi' ? 'मेरे पोस्ट किए गए काम' : 'My Posted Jobs')}
+              </h1>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                {currentUser?.role === 'WORKER'
+                  ? (lang === 'hi' ? 'आपके द्वारा भेजे गए सभी आवेदन और उनकी स्थिति' : 'Track your applications and confirmation status')
+                  : (lang === 'hi' ? 'आपके द्वारा पोस्ट किए गए कार्य और आवेदकों की सूची' : 'Review applicants and manage your active requests')}
+              </p>
             </div>
 
             {currentUser?.role === 'WORKER' ? (
-              <div className="feed-content" style={{ padding: 0 }}>
-                {workerApplications.length === 0 ? (
-                  <div className="empty-state">
-                    <Briefcase size={36} />
-                    <p style={{ fontWeight: 700 }}>{t.noApplicationsYet}</p>
-                    <button
-                      className="btn-apply"
-                      style={{ padding: '8px 16px', fontSize: '0.84rem' }}
-                      onClick={() => setActiveNavTab('EXPLORE')}
-                    >
-                      {lang === 'hi' ? 'पास के काम देखें →' : 'Browse Nearby Jobs →'}
-                    </button>
+              workerApplications.length === 0 ? (
+                <div className="empty-state-view">
+                  <Briefcase size={32} className="empty-state-icon" />
+                  <div className="empty-state-title">
+                    {lang === 'hi' ? 'अभी कोई आवेदन नहीं है' : 'No job applications yet'}
                   </div>
-                ) : (
-                  workerApplications.map((app) => (
-                    <div key={app.id} className="job-card">
-                      <div className="job-header">
-                        <div>
-                          <div className="job-title">{app.job.title}</div>
-                          <div className="business-sub">{app.job.business.business_name}</div>
-                        </div>
-                        <div className="wage-badge">₹{app.job.wage}/{lang === 'hi' ? 'दिन' : 'day'}</div>
-                      </div>
-                      <div className="job-meta-grid">
-                        <div className="meta-chip">
-                          <MapPin size={12} />
-                          {app.job.locality}
-                        </div>
-                        <div className="meta-chip">
-                          Status: <strong>{app.status}</strong>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : (
-              <div className="feed-content" style={{ padding: 0 }}>
-                {customerJobs.length === 0 ? (
-                  <div className="empty-state">
-                    <Briefcase size={36} />
-                    <p style={{ fontWeight: 700 }}>{t.noJobsPosted}</p>
-                    <button
-                      className="btn-apply"
-                      style={{ padding: '8px 16px', fontSize: '0.84rem' }}
-                      onClick={() => setShowPostJobSheet(true)}
-                    >
-                      {t.postJobButton}
-                    </button>
-                  </div>
-                ) : (
-                  customerJobs.map((job) => (
-                    <div key={job.id} className="job-card">
-                      <div className="job-header">
-                        <div>
-                          <div className="job-title">{job.title}</div>
-                          <div className="business-sub">{job.locality}</div>
-                        </div>
-                        <div className="wage-badge">₹{job.wage}/{lang === 'hi' ? 'दिन' : 'day'}</div>
-                      </div>
-                      <div className="job-actions">
-                        <button
-                          className="btn-apply"
-                          style={{ background: '#3b82f6', color: '#fff' }}
-                          onClick={() => handleViewApplicants(job)}
-                        >
-                          {t.viewApplicants} ({job.applicant_count})
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 3: CALLS & CONTACTS (All unlocked telephone/WhatsApp actions) */}
-        {activeNavTab === 'CALLS' && (
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div className="section-title">
-              <Phone size={18} color="#10b981" />
-              {lang === 'hi' ? 'अनलॉक किए गए संपर्क और कॉल' : 'Unlocked Contacts & Calls'}
-            </div>
-
-            {unlockedCallsCount === 0 ? (
-              <div className="empty-state">
-                <Phone size={36} />
-                <p style={{ fontWeight: 700 }}>
-                  {lang === 'hi'
-                    ? 'अभी कोई संपर्क अनलॉक नहीं हुआ है।'
-                    : 'No direct contacts unlocked yet.'}
-                </p>
-                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                  {lang === 'hi'
-                    ? 'जब कोई काम स्वीकार (Accept) होता है, तब दोनों पक्षों का फोन नंबर यहाँ दिखाई देता है।'
-                    : 'When a job is accepted, direct phone and WhatsApp contacts unlock here.'}
-                </span>
-              </div>
-            ) : (
-              currentUser?.role === 'WORKER' ? (
-                workerApplications
-                  .filter((a) => a.status === 'ACCEPTED' || a.status === 'COMPLETED')
-                  .map((app) => (
-                    <div key={app.id} className="unlocked-contact-box">
-                      <div className="contact-header">
-                        <ShieldCheck size={16} />
-                        {app.job.business.business_name}
-                      </div>
-                      <div style={{ fontSize: '0.84rem', color: '#f8fafc' }}>
-                        {app.job.title} · {app.job.locality}
-                      </div>
-                      <div className="contact-actions">
-                        <a href={`tel:${app.job.business.phone}`} className="btn-call">
-                          <Phone size={14} /> Call ({app.job.business.phone})
-                        </a>
-                        <a
-                          href={`https://wa.me/91${app.job.business.phone}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn-whatsapp"
-                        >
-                          WhatsApp
-                        </a>
-                      </div>
-                    </div>
-                  ))
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <p style={{ fontSize: '0.84rem', color: '#94a3b8' }}>
-                    {lang === 'hi' ? 'आपके द्वारा स्वीकार किए गए कामगार:' : 'Workers accepted across your active jobs:'}
-                  </p>
-                  {customerJobs.map((j) => (
-                    <button
-                      key={j.id}
-                      className="btn-apply"
-                      style={{ background: '#1e293b', color: '#fff', border: '1px solid #334155', justifyContent: 'space-between' }}
-                      onClick={() => handleViewApplicants(j)}
-                    >
-                      <span>{j.title} ({j.locality})</span>
-                      <span style={{ color: '#34d399' }}>{j.accepted_count} Accepted →</span>
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ marginTop: '8px' }}
+                    onClick={() => setActiveNavTab('EXPLORE')}
+                  >
+                    {lang === 'hi' ? 'पास के काम देखें →' : 'Browse Nearby Jobs →'}
+                  </button>
                 </div>
+              ) : (
+                workerApplications.map((app) => (
+                  <div key={app.id} className="job-item" style={{ backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="job-header-row">
+                      <div>
+                        <div className="job-title">{app.job.title}</div>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{app.job.business.business_name}</div>
+                      </div>
+                      <div className="job-wage">₹{app.job.wage}/{lang === 'hi' ? 'दिन' : 'day'}</div>
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      Locality: {app.job.locality} · Status: <strong>{app.status}</strong>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : (
+              customerJobs.length === 0 ? (
+                <div className="empty-state-view">
+                  <Briefcase size={32} className="empty-state-icon" />
+                  <div className="empty-state-title">
+                    {lang === 'hi' ? 'कोई काम पोस्ट नहीं किया गया है' : 'No jobs posted yet'}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ marginTop: '8px' }}
+                    onClick={() => setShowPostJobSheet(true)}
+                  >
+                    {t.postJobButton}
+                  </button>
+                </div>
+              ) : (
+                customerJobs.map((job) => (
+                  <div key={job.id} className="job-item" style={{ backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="job-header-row">
+                      <div>
+                        <div className="job-title">{job.title}</div>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{job.locality}</div>
+                      </div>
+                      <div className="job-wage">₹{job.wage}/{lang === 'hi' ? 'दिन' : 'day'}</div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        {job.applicant_count || 0} {lang === 'hi' ? 'कामगारों ने आवेदन किया' : 'applicants'}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ minHeight: '32px', fontSize: '0.78rem' }}
+                        onClick={() => handleViewApplicants(job)}
+                      >
+                        {lang === 'hi' ? 'आवेदक देखें' : 'View Applicants'} ({job.applicant_count || 0})
+                      </button>
+                    </div>
+                  </div>
+                ))
               )
             )}
           </div>
         )}
 
-        {/* Tab 4: PROFILE */}
+        {/* TAB 3: MESSAGES & COORDINATION */}
+        {activeNavTab === 'MESSAGES' && (
+          <MessagesView
+            lang={lang}
+            userRole={currentUser?.role || 'BUSINESS'}
+            coordinations={coordinations}
+            onVerifyOtp={handleVerifyCoordinationOtp}
+            onConfirmFinish={handleConfirmFinish}
+            onOpenRating={(jobId, cId, cName) => {
+              setRatingTarget({ jobId, toUserId: cId, toName: cName, role: currentUser?.role === 'WORKER' ? 'BUSINESS' : 'WORKER' });
+              setShowRatingModal(true);
+            }}
+          />
+        )}
+
+        {/* TAB 4: PROFILE */}
         {activeNavTab === 'PROFILE' && (
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="section-title">
-              <UserIcon size={18} color="#f59e0b" />
-              {t.navProfile}
+          <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+            <div>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {lang === 'hi' ? 'मेरी प्रोफ़ाइल' : 'Account & Profile'}
+              </h1>
             </div>
 
-            <div className="worker-card" style={{ gap: '14px' }}>
-              <div className="worker-card-header">
-                <div className="worker-name-group">
-                  <div className="worker-avatar" style={{ width: '56px', height: '56px', fontSize: '1.3rem' }}>
-                    {currentUser?.name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="worker-name" style={{ fontSize: '1.1rem' }}>
-                      {currentUser?.name}
-                      <ShieldCheck size={18} color="#10b981" />
-                    </div>
-                    <div className="worker-trade">
-                      {currentUser?.role === 'WORKER' ? t.worker : t.customer} · {currentUser?.phone}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="worker-badges-row">
-                <div className="trust-badge verified">
-                  <CheckCircle2 size={13} />
-                  {t.verifiedPhone}
-                </div>
-                <div className="trust-badge distance">
-                  <MapPin size={13} color={userLocation.isLive ? "#10b981" : "#f59e0b"} />
-                  {userLocation.locality || t.pilotLocality}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-                <button
-                  className="btn-apply"
-                  style={{ background: 'var(--primary-light)', color: '#fbbf24', border: '1px solid var(--primary-border)' }}
-                  onClick={() => setShowLoginModal(true)}
-                >
-                  {currentUser ? t.switchAccount : t.login}
-                </button>
-                <button
-                  className="btn-apply"
-                  style={{ background: 'var(--danger-light)', color: '#f87171', border: '1px solid var(--danger)' }}
-                  onClick={handleLogout}
-                >
-                  {t.signOut}
-                </button>
-              </div>
-
-              {/* Developer / Demo Mode Switcher in Profile */}
-              <div style={{ textAlign: 'center', marginTop: '4px' }}>
-                <button
-                  type="button"
-                  onClick={handleToggleDemoMode}
+            <div style={{ padding: '16px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div
                   style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: isDemoMode ? '#fbbf24' : '#64748b',
-                    fontSize: '0.74rem',
-                    cursor: 'pointer',
-                    padding: '4px',
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: 'var(--radius-full)',
+                    backgroundColor: 'var(--brand-primary)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.4rem',
+                    fontWeight: 800,
                   }}
                 >
-                  {isDemoMode ? `✓ ${t.demoModeActive}` : `🧪 ${t.enterDemoMode}`}
+                  {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {currentUser?.name}
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                    {currentUser?.role === 'WORKER' ? (lang === 'hi' ? 'कामगार (Worker)' : 'Worker') : (lang === 'hi' ? 'ग्राहक (Customer)' : 'Customer')} · {currentUser?.phone}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={handleToggleRole}
+                >
+                  <ArrowLeftRight size={14} />
+                  <span>{lang === 'hi' ? 'भूमिका बदलें' : 'Switch Role'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ color: 'var(--brand-danger)' }}
+                  onClick={handleLogout}
+                >
+                  <LogOut size={14} />
+                  <span>{lang === 'hi' ? 'लॉगआउट' : 'Sign Out'}</span>
                 </button>
               </div>
             </div>
@@ -1139,18 +774,17 @@ export default function KaamSetuApp() {
         )}
       </main>
 
-      {/* 4. FIXED MOBILE BOTTOM NAVIGATION */}
+      {/* 4. Fixed Bottom Navigation */}
       <BottomNav
         lang={lang}
+        userRole={currentUser?.role}
         activeTab={activeNavTab}
         onSelectTab={setActiveNavTab}
-        myJobsCount={
-          currentUser?.role === 'WORKER' ? workerApplications.length : customerJobs.length
-        }
-        unlockedCallsCount={unlockedCallsCount}
+        myJobsCount={currentUser?.role === 'WORKER' ? workerApplications.length : customerJobs.length}
+        messagesCount={coordinations.length}
       />
 
-      {/* 5. MODAL: POST JOB BOTTOM SHEET */}
+      {/* 5. Post Job Wizard */}
       <PostJobSheet
         lang={lang}
         isOpen={showPostJobSheet}
@@ -1167,7 +801,7 @@ export default function KaamSetuApp() {
         userCoordinates={userLocation.isLive ? { latitude: userLocation.lat, longitude: userLocation.lng } : null}
       />
 
-      {/* 6. MODAL: APPLICANT REVIEW SHEET */}
+      {/* 6. Applicant Review Sheet */}
       <ApplicantSheet
         lang={lang}
         isOpen={showApplicantSheet}
@@ -1190,7 +824,7 @@ export default function KaamSetuApp() {
         loading={loading}
       />
 
-      {/* 7. MODAL: MUTUAL RATING & REVIEW */}
+      {/* 7. Rating & Review Modal */}
       <RatingModal
         lang={lang}
         isOpen={showRatingModal}
@@ -1206,33 +840,29 @@ export default function KaamSetuApp() {
         loading={loading}
       />
 
-      {/* 8. MODAL: DEDICATED LOGIN WINDOW */}
-      <LoginModal
+      {/* 8. Location Modal */}
+      <LocationModal
+        isOpen={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
         lang={lang}
-        isOpen={showLoginModal || !currentUser}
-        onClose={() => setShowLoginModal(false)}
-        canClose={Boolean(currentUser)}
-        loginRole={loginRole}
-        onSelectRole={setLoginRole}
-        loginStep={loginStep}
-        onSetStep={setLoginStep}
-        phone={loginPhone}
-        onChangePhone={setLoginPhone}
-        name={loginName}
-        onChangeName={setLoginName}
-        locality={loginLocality}
-        onChangeLocality={setLoginLocality}
-        otp={loginOtp}
-        onChangeOtp={setLoginOtp}
-        error={loginError}
-        loading={loginLoading}
-        onSendOtp={handleSendOtp}
-        onVerifyOtp={handleVerifyLoginOtp}
-        demoPersonas={DEMO_PERSONAS}
-        onSelectDemoPersona={(personaKey) => switchPersona(personaKey)}
-        isDemoMode={isDemoMode}
-        onToggleDemoMode={handleToggleDemoMode}
-        onContinueAsGuest={() => setShowLoginModal(false)}
+        currentLocality={userLocation.locality}
+        onSelectLocation={(loc: LocationItem) => {
+          setUserLocation({
+            lat: loc.lat,
+            lng: loc.lng,
+            locality: `${loc.locality}, ${loc.city}`,
+            isLive: loc.locality === 'Current GPS Location',
+          });
+          showNotification(`Location set to ${loc.locality}`);
+        }}
+      />
+
+      {/* 9. Onboarding / Auth Modal */}
+      <OnboardingModal
+        isOpen={showOnboardingModal}
+        onClose={() => setShowOnboardingModal(false)}
+        lang={lang}
+        onCompleteOnboarding={handleCompleteOnboarding}
       />
     </>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { MapPin, Globe, Sparkles, LogOut, KeyRound } from 'lucide-react';
+import { MapPin, Globe, ChevronDown, LogOut, ArrowLeftRight } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
 
 interface HeaderProps {
@@ -10,10 +10,13 @@ interface HeaderProps {
   currentUser: {
     name: string;
     role: 'WORKER' | 'BUSINESS';
+    phone?: string;
   } | null;
   localityName?: string;
   isGpsActive?: boolean;
+  onOpenLocationModal: () => void;
   onOpenLogin: () => void;
+  onToggleRole?: () => void;
   onLogout: () => void;
 }
 
@@ -21,97 +24,95 @@ export const Header: React.FC<HeaderProps> = ({
   lang,
   onToggleLang,
   currentUser,
-  localityName,
-  isGpsActive,
+  localityName = 'Ranjit Avenue, Amritsar',
+  isGpsActive = false,
+  onOpenLocationModal,
   onOpenLogin,
+  onToggleRole,
   onLogout,
 }) => {
   const t = translations[lang];
 
   return (
     <header className="app-header">
-      {/* Top Brand & Language Controls */}
-      <div className="header-brand-row">
-        <div className="brand-logo">
-          <span>Kaam</span>Setu
+      {/* Location Selector (Uber / Zomato style) */}
+      <button
+        type="button"
+        className="header-location-btn"
+        onClick={onOpenLocationModal}
+        aria-label="Change location"
+      >
+        <div className="header-location-icon">
+          <MapPin size={18} color="var(--brand-accent)" />
         </div>
+        <div className="header-location-text">
+          <div className="header-location-locality">
+            <span>{localityName}</span>
+            <ChevronDown size={14} color="var(--text-muted)" />
+          </div>
+          <div className="header-location-sub">
+            {lang === 'hi' ? 'स्थान बदलें' : 'Change Location'}
+          </div>
+        </div>
+      </button>
 
-        <div className="header-controls">
-          <button
-            onClick={onToggleLang}
-            className="lang-toggle-btn"
-            title="Switch Language / भाषा बदलें"
-            aria-label="Toggle language between English and Hindi"
-          >
-            <Globe size={13} color="#f59e0b" />
-            <span>{lang === 'en' ? 'हिन्दी' : 'English'}</span>
-          </button>
+      {/* Right Controls: Lang + Profile / Role Switch */}
+      <div className="header-actions">
+        {/* Language Switch */}
+        <button
+          type="button"
+          onClick={onToggleLang}
+          className="lang-switch-btn"
+          aria-label="Toggle language"
+        >
+          <Globe size={13} />
+          <span>{lang === 'en' ? 'हिन्दी' : 'English'}</span>
+        </button>
 
+        {/* Quick Role Toggle (Worker <-> Customer) */}
+        {currentUser && onToggleRole && (
           <button
-            onClick={onOpenLogin}
+            type="button"
+            onClick={onToggleRole}
             style={{
-              background: 'rgba(245, 158, 11, 0.14)',
-              border: '1px solid rgba(245, 158, 11, 0.3)',
-              color: '#fbbf24',
-              borderRadius: '9999px',
-              padding: '4px 10px',
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
+              padding: '4px 8px',
+              borderRadius: 'var(--radius-full)',
+              border: '1px solid var(--border-subtle)',
+              background: 'var(--bg-subtle)',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
             }}
+            title={lang === 'hi' ? 'भूमिका बदलें' : 'Switch role'}
           >
-            <KeyRound size={12} />
-            {currentUser ? t.switchAccount : t.login}
+            <ArrowLeftRight size={12} />
+            <span>{currentUser.role === 'WORKER' ? 'Worker' : 'Customer'}</span>
           </button>
+        )}
 
-          {currentUser && (
-            <button
-              onClick={onLogout}
-              style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
-                color: '#f87171',
-                borderRadius: '9999px',
-                padding: '4px 8px',
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
-              title={t.signOut}
-              aria-label="Sign out"
-            >
-              <LogOut size={12} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* User Greeting and Locality */}
-      <div className="header-user-row">
-        <div>
-          <div className="user-greeting-title">
-            {currentUser ? `${currentUser.name.split(' ')[0]} 👋` : t.appName}
-          </div>
-          <div className="user-loc-pill">
-            <MapPin size={12} color={isGpsActive ? "#10b981" : "#f59e0b"} />
-            {localityName || t.pilotLocality}
-          </div>
-        </div>
-
-        {currentUser && (
-          <div
-            className={`role-pill-badge ${
-              currentUser.role === 'BUSINESS' ? 'business' : ''
-            }`}
+        {/* Profile Avatar / Login */}
+        {currentUser ? (
+          <button
+            type="button"
+            className="header-profile-btn"
+            onClick={onOpenLogin}
+            title={currentUser.name}
           >
-            {currentUser.role === 'WORKER' ? '👷' : '🏠'}
-            <span>{currentUser.role === 'WORKER' ? t.worker : t.customer}</span>
-          </div>
+            {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ minHeight: '32px', padding: '4px 12px', fontSize: '0.78rem' }}
+            onClick={onOpenLogin}
+          >
+            {lang === 'hi' ? 'लॉगिन' : 'Login'}
+          </button>
         )}
       </div>
     </header>

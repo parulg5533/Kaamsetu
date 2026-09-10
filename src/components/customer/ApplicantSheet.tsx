@@ -10,9 +10,10 @@ import {
   MessageSquare,
   ShieldCheck,
   UserX,
+  Check,
 } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
-import { BottomSheet, Avatar, Badge, Button, EmptyState } from '@/components/ui';
+import { BottomSheet } from '@/components/ui/BottomSheet';
 
 interface Applicant {
   application_id: string;
@@ -60,25 +61,22 @@ export const ApplicantSheet: React.FC<ApplicantSheetProps> = ({
     <BottomSheet
       isOpen={isOpen}
       onClose={onClose}
-      title={t.viewApplicants}
+      title={lang === 'hi' ? 'आवेदक देखें' : 'Review Applicants'}
       subtitle={`${job.title} · ${job.locality}`}
     >
-      {/* Applicants List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {applicants.length === 0 ? (
-          <EmptyState
-            icon={<UserX size={28} />}
-            title={
-              lang === 'hi'
-                ? 'इस काम के लिए अभी तक कोई आवेदन नहीं आया है।'
-                : 'No applicants yet for this job.'
-            }
-            description={
-              lang === 'hi'
-                ? 'पास के कामगारों को नोटिफिकेशन भेज दिया गया है।'
-                : 'Nearby workers have been notified and will apply soon.'
-            }
-          />
+          <div className="empty-state-view">
+            <UserX size={32} className="empty-state-icon" />
+            <div className="empty-state-title">
+              {lang === 'hi' ? 'अभी तक कोई आवेदन नहीं आया है' : 'No applicants yet for this job'}
+            </div>
+            <div className="empty-state-desc">
+              {lang === 'hi'
+                ? 'पास के योग्य कामगारों को सूचना भेज दी गई है।'
+                : 'Nearby workers have been notified and will apply shortly.'}
+            </div>
+          </div>
         ) : (
           applicants.map((app) => {
             const isAccepted = app.status === 'ACCEPTED' || app.status === 'COMPLETED';
@@ -86,97 +84,100 @@ export const ApplicantSheet: React.FC<ApplicantSheetProps> = ({
             return (
               <div
                 key={app.application_id}
-                className={`worker-card ${isAccepted ? 'accepted-worker' : ''}`}
                 style={{
-                  borderColor: isAccepted ? 'var(--success)' : 'var(--border-subtle)',
-                  background: isAccepted ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-card)',
+                  padding: '14px',
+                  backgroundColor: isAccepted ? 'var(--brand-success-subtle)' : 'var(--bg-subtle)',
+                  border: `1.5px solid ${isAccepted ? 'var(--brand-success)' : 'var(--border-subtle)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
                 }}
               >
-                <div className="worker-card-header">
-                  <div className="worker-name-group">
-                    <Avatar name={app.name} size="md" isVerified={true} />
-                    <div>
-                      <div className="worker-name">
-                        <span>{app.name}</span>
-                        <Badge variant="verified" icon={<ShieldCheck size={13} />}>
-                          {lang === 'hi' ? 'सत्यापित' : 'Verified'}
-                        </Badge>
-                      </div>
-                      <div className="worker-trade">
-                        {app.skills.join(' · ') ||
-                          (lang === 'hi' ? 'जनरल वर्कर' : 'General Worker')}
-                      </div>
+                {/* Header: Name, Verified check, Rating */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {app.name}
+                      </span>
+                      <ShieldCheck size={16} color="var(--brand-success)" />
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      {app.distance_km} km away · {app.locality}
                     </div>
                   </div>
 
-                  {isAccepted ? (
-                    <Badge variant="success">ACCEPTED ✓</Badge>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => onAcceptWorker(app.application_id)}
-                      disabled={loading}
-                    >
-                      {lang === 'hi' ? 'स्वीकार करें' : 'Accept Worker'}
-                    </Button>
+                  {app.rating > 0 && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                      <span>{app.rating.toFixed(1)}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>({app.jobs_completed} {lang === 'hi' ? 'काम' : 'jobs'})</span>
+                    </div>
                   )}
                 </div>
 
-                {/* Trust & Distance Badges */}
-                <div className="worker-badges-row">
-                  <Badge variant="default" icon={<MapPin size={12} />}>
-                    {app.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'} ({app.locality})
-                  </Badge>
+                {/* Actions: Accept or Contact */}
+                <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                  {isAccepted ? (
+                    <div style={{ display: 'flex', gap: '8px', width: '100%', alignItems: 'center' }}>
+                      {app.phone ? (
+                        <>
+                          <a
+                            href={`tel:${app.phone}`}
+                            className="btn btn-primary"
+                            style={{ flex: 1, minHeight: '34px', fontSize: '0.8rem', textDecoration: 'none' }}
+                          >
+                            <Phone size={14} />
+                            <span>Call ({app.phone})</span>
+                          </a>
+                          <a
+                            href={`https://wa.me/91${app.phone}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn"
+                            style={{
+                              backgroundColor: '#25D366',
+                              color: '#ffffff',
+                              textDecoration: 'none',
+                              minHeight: '34px',
+                              padding: '0 14px',
+                            }}
+                            aria-label="WhatsApp"
+                          >
+                            <MessageSquare size={14} />
+                          </a>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: '0.82rem', color: 'var(--brand-success)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Check size={16} />
+                          <span>{lang === 'hi' ? 'स्वीकृत (फोन नंबर अनलॉक हुआ)' : 'Accepted (Contact Unlocked)'}</span>
+                        </div>
+                      )}
 
-                  <Badge variant="warning" icon={<Star size={12} color="#f59e0b" fill="#f59e0b" />}>
-                    {app.rating} ({app.jobs_completed} {t.jobsCompleted})
-                  </Badge>
-
-                  <Badge variant="neutral" icon={<CheckCircle2 size={12} />}>
-                    {app.attendance_rate}% {t.attendance}
-                  </Badge>
-
-                  <Badge variant="verified" icon={<ShieldCheck size={12} />}>
-                    {t.verifiedPhone}
-                  </Badge>
-                </div>
-
-                {/* Unlocked Contact Box when accepted */}
-                {isAccepted && app.phone && (
-                  <div className="unlocked-contact-box" style={{ marginTop: '4px' }}>
-                    <div className="contact-header">
-                      <ShieldCheck size={15} />
-                      {t.workerContactUnlocked}
-                    </div>
-                    <div className="contact-actions">
-                      <a href={`tel:${app.phone}`} className="btn-call">
-                        <Phone size={14} /> {t.callNow} ({app.phone})
-                      </a>
-                      <a
-                        href={`https://wa.me/91${app.phone}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-whatsapp"
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ minHeight: '34px', fontSize: '0.78rem' }}
+                        onClick={() => onRateWorker(app.worker_id, app.name)}
                       >
-                        <MessageSquare size={14} /> {t.whatsapp}
-                      </a>
+                        <Star size={13} color="var(--brand-accent)" />
+                        <span>{lang === 'hi' ? 'रेट करें' : 'Rate'}</span>
+                      </button>
                     </div>
-
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      fullWidth
-                      leftIcon={<Star size={14} />}
-                      onClick={() => onRateWorker(app.worker_id, app.name)}
-                      style={{ marginTop: '6px' }}
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={loading}
+                      className="btn btn-primary"
+                      style={{ width: '100%', minHeight: '36px', fontSize: '0.84rem' }}
+                      onClick={() => onAcceptWorker(app.application_id)}
                     >
-                      {lang === 'hi'
-                        ? 'काम पूरा मार्क करें और रेटिंग दें'
-                        : 'Mark Worked & Rate Worker'}
-                    </Button>
-                  </div>
-                )}
+                      <Check size={16} />
+                      <span>{lang === 'hi' ? 'कामगार को स्वीकार करें (Accept)' : 'Accept Worker & Unlock Phone'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })

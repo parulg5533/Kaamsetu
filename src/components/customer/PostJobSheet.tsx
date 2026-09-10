@@ -13,17 +13,14 @@ import {
   MapPin,
   Calendar,
   Clock,
-  Check,
   ArrowRight,
   ArrowLeft,
-  DollarSign,
-  AlertCircle,
-  Radio,
+  X,
   Plus,
   Minus,
+  Check,
 } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
-import { BottomSheet, Button, Badge, Input, Textarea } from '@/components/ui';
 
 interface Skill {
   id: string;
@@ -44,107 +41,23 @@ interface PostJobSheetProps {
   userCoordinates?: { latitude: number; longitude: number } | null;
 }
 
-interface TradeOption {
+interface CategoryOption {
   key: string;
   nameEn: string;
   nameHi: string;
-  subEn: string;
-  subHi: string;
   icon: React.ReactNode;
-  iconClass: string;
   defaultWage: number;
 }
 
-const TRADE_OPTIONS: TradeOption[] = [
-  {
-    key: 'plumber',
-    nameEn: 'Plumbing',
-    nameHi: 'नल मिस्त्री',
-    subEn: 'Pipes, taps & leakage',
-    subHi: 'पाइप व नल रिपेयर',
-    icon: <Wrench size={22} />,
-    iconClass: 'service-icon-plumber',
-    defaultWage: 650,
-  },
-  {
-    key: 'electrician',
-    nameEn: 'Electrician',
-    nameHi: 'बिजली मिस्त्री',
-    subEn: 'Wiring, fan & switches',
-    subHi: 'वायरिंग व पंखा',
-    icon: <Zap size={22} />,
-    iconClass: 'service-icon-electrician',
-    defaultWage: 650,
-  },
-  {
-    key: 'cleaner',
-    nameEn: 'Cleaning',
-    nameHi: 'सफाई / हेल्पर',
-    subEn: 'House & shop deep clean',
-    subHi: 'घर व दुकान सफाई',
-    icon: <Sparkles size={22} />,
-    iconClass: 'service-icon-cleaning',
-    defaultWage: 500,
-  },
-  {
-    key: 'painter',
-    nameEn: 'Painting',
-    nameHi: 'पेंटर व पुताई',
-    subEn: 'Whitewash & color',
-    subHi: 'पुताई व डिस्टेंपर',
-    icon: <Paintbrush size={22} />,
-    iconClass: 'service-icon-painter',
-    defaultWage: 700,
-  },
-  {
-    key: 'helper',
-    nameEn: 'Loading / Shifting',
-    nameHi: 'लोडिंग व शिफ्ट',
-    subEn: 'Heavy goods & labor',
-    subHi: 'सामान उठाना व ले जाना',
-    icon: <Truck size={22} />,
-    iconClass: 'service-icon-helper',
-    defaultWage: 600,
-  },
-  {
-    key: 'carpenter',
-    nameEn: 'Carpenter',
-    nameHi: 'बढ़ई / मिस्त्री',
-    subEn: 'Wood & furniture',
-    subHi: 'लकड़ी व फर्नीचर',
-    icon: <Hammer size={22} />,
-    iconClass: 'service-icon-carpenter',
-    defaultWage: 750,
-  },
-  {
-    key: 'hospitality',
-    nameEn: 'Cook / Kitchen',
-    nameHi: 'रसोई व सहायक',
-    subEn: 'Cooking & kitchen help',
-    subHi: 'खाना व रसोई हेल्पर',
-    icon: <Utensils size={22} />,
-    iconClass: 'service-icon-hospitality',
-    defaultWage: 600,
-  },
-  {
-    key: 'other',
-    nameEn: 'General Helper',
-    nameHi: 'जनरल हेल्पर',
-    subEn: 'Day labor & odd jobs',
-    subHi: 'दैनिक सहायक व अन्य काम',
-    icon: <Briefcase size={22} />,
-    iconClass: 'service-icon-all',
-    defaultWage: 500,
-  },
-];
-
-const POPULAR_LOCALITIES = [
-  'Lawrence Road',
-  'Ranjit Avenue',
-  'Majitha Road',
-  'Mall Road',
-  'Civil Lines',
-  'Putlighar',
+const CATEGORIES: CategoryOption[] = [
+  { key: 'electrician', nameEn: 'Electrician', nameHi: 'बिजली मिस्त्री', icon: <Zap size={22} />, defaultWage: 650 },
+  { key: 'plumber', nameEn: 'Plumber', nameHi: 'नल मिस्त्री', icon: <Wrench size={22} />, defaultWage: 650 },
+  { key: 'cleaner', nameEn: 'Cleaning Helper', nameHi: 'सफाई कर्मी', icon: <Sparkles size={22} />, defaultWage: 500 },
+  { key: 'painter', nameEn: 'Painter', nameHi: 'पेंटर व पुताई', icon: <Paintbrush size={22} />, defaultWage: 700 },
+  { key: 'carpenter', nameEn: 'Carpenter', nameHi: 'बढ़ई / मिस्त्री', icon: <Hammer size={22} />, defaultWage: 750 },
+  { key: 'helper', nameEn: 'Labour / Shifting', nameHi: 'मजदूर व लोडिंग', icon: <Truck size={22} />, defaultWage: 600 },
+  { key: 'hospitality', nameEn: 'Cook & Kitchen', nameHi: 'रसोइया व सहायक', icon: <Utensils size={22} />, defaultWage: 650 },
+  { key: 'general', nameEn: 'General Helper', nameHi: 'सामान्य सहायक', icon: <Briefcase size={22} />, defaultWage: 550 },
 ];
 
 export const PostJobSheet: React.FC<PostJobSheetProps> = ({
@@ -156,700 +69,573 @@ export const PostJobSheet: React.FC<PostJobSheetProps> = ({
   loading,
   preSelectedSkillId,
   preSelectedWorkerName,
-  userLocality = 'Lawrence Road, Amritsar',
+  userLocality = 'Amritsar',
   userCoordinates,
 }) => {
+  const [step, setStep] = useState<number>(1);
   const t = translations[lang];
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-  // 5 Step State
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
-
-  // Step 1: Work Type
-  const [selectedTradeKey, setSelectedTradeKey] = useState<string>('electrician');
-  const [skillId, setSkillId] = useState<string>('');
-  const [customTitle, setCustomTitle] = useState<string>('');
-
-  // Step 2: Location
+  // Wizard States
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string>('electrician');
+  const [jobTitle, setJobTitle] = useState<string>('Electrician');
+  const [description, setDescription] = useState<string>('');
   const [locality, setLocality] = useState<string>(userLocality);
-  const [isGpsActive, setIsGpsActive] = useState<boolean>(true);
-  const [specificAddress, setSpecificAddress] = useState<string>('');
-
-  // Step 3: Date & Timing
-  const [timingChoice, setTimingChoice] = useState<'TODAY' | 'TOMORROW' | 'CUSTOM'>('TODAY');
-  const [jobDate, setJobDate] = useState<string>(todayStr);
-  const [shiftType, setShiftType] = useState<'MORNING' | 'FULL_DAY' | 'EVENING'>('FULL_DAY');
-  const [startTime, setStartTime] = useState<string>('09:00');
-  const [endTime, setEndTime] = useState<string>('18:00');
-
-  // Step 4: Daily Wage & Worker Count
+  const [dateOption, setDateOption] = useState<'TODAY' | 'TOMORROW' | 'CUSTOM'>('TODAY');
+  const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [shiftTiming, setShiftTiming] = useState<string>('09:00 - 18:00');
   const [wage, setWage] = useState<number>(650);
-  const [isCustomWage, setIsCustomWage] = useState<boolean>(false);
   const [workersRequired, setWorkersRequired] = useState<number>(1);
+  const [foodProvided, setFoodProvided] = useState<boolean>(false);
 
-  // Step 5: Add-ons & Extra Needs
-  const [foodProvided, setFoodProvided] = useState<boolean>(true);
-  const [materialsProvided, setMaterialsProvided] = useState<boolean>(true);
-  const [isUrgent, setIsUrgent] = useState<boolean>(false);
-  const [notes, setNotes] = useState<string>('');
-
-  // Match selected trade to backend skillId
+  // Sync initial category or locality
   useEffect(() => {
-    if (skillsList.length > 0) {
-      if (preSelectedSkillId) {
-        setSkillId(preSelectedSkillId);
-        const match = skillsList.find((s) => s.id === preSelectedSkillId);
-        if (match) {
-          const lower = match.name.toLowerCase();
-          const found = TRADE_OPTIONS.find((t) => lower.includes(t.key));
-          if (found) setSelectedTradeKey(found.key);
-        }
-      } else {
-        const match = skillsList.find((s) => s.name.toLowerCase().includes(selectedTradeKey));
-        setSkillId(match ? match.id : skillsList[0].id);
+    if (userLocality) setLocality(userLocality);
+  }, [userLocality]);
+
+  useEffect(() => {
+    if (preSelectedSkillId && skillsList.length > 0) {
+      const match = skillsList.find((s) => s.id === preSelectedSkillId);
+      if (match) {
+        setJobTitle(match.name);
       }
     }
-  }, [skillsList, preSelectedSkillId, selectedTradeKey]);
+  }, [preSelectedSkillId, skillsList]);
 
-  // When timing choice changes
-  const handleTimingSelect = (choice: 'TODAY' | 'TOMORROW' | 'CUSTOM') => {
-    setTimingChoice(choice);
-    if (choice === 'TODAY') setJobDate(todayStr);
-    else if (choice === 'TOMORROW') setJobDate(tomorrowStr);
+  if (!isOpen) return null;
+
+  const handleSelectCategory = (cat: CategoryOption) => {
+    setSelectedCategoryKey(cat.key);
+    setJobTitle(lang === 'hi' ? cat.nameHi : cat.nameEn);
+    setWage(cat.defaultWage);
+    setStep(2);
   };
 
-  // When shift choice changes
-  const handleShiftSelect = (shift: 'MORNING' | 'FULL_DAY' | 'EVENING') => {
-    setShiftType(shift);
-    if (shift === 'MORNING') {
-      setStartTime('09:00');
-      setEndTime('14:00');
-    } else if (shift === 'FULL_DAY') {
-      setStartTime('09:00');
-      setEndTime('18:00');
-    } else if (shift === 'EVENING') {
-      setStartTime('14:00');
-      setEndTime('20:00');
-    }
-  };
+  const handleFinalSubmit = () => {
+    // Find skill ID from DB list or fallback to first
+    const matchedSkill =
+      skillsList.find((s) => s.name.toLowerCase().includes(selectedCategoryKey)) ||
+      skillsList[0] ||
+      { id: 'skill-general' };
 
-  const handleNext = () => {
-    if (step < 5) {
-      setStep((prev) => (prev + 1) as any);
-    }
-  };
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    const finalDate = dateOption === 'TODAY' ? todayStr : dateOption === 'TOMORROW' ? tomorrowStr : customDate;
 
-  const handleBack = () => {
-    if (step > 1) {
-      setStep((prev) => (prev - 1) as any);
-    }
-  };
+    const [startTimeStr, endTimeStr] = shiftTiming.split(' - ');
 
-  const handleFinalSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trade = TRADE_OPTIONS.find((t) => t.key === selectedTradeKey);
-    const finalTitle =
-      customTitle.trim() ||
-      (lang === 'hi' ? `${trade?.nameHi || 'वर्कर'} चाहिए` : `${trade?.nameEn || 'Worker'} Needed`);
-
-    const fullLocality = specificAddress.trim()
-      ? `${specificAddress.trim()}, ${locality}`
-      : locality;
-
-    const fullDescription = [
-      notes.trim(),
-      materialsProvided ? (lang === 'hi' ? 'सामान उपलब्ध है' : 'Materials provided') : '',
-      isUrgent ? (lang === 'hi' ? 'तुरंत चाहिए' : 'Urgent request') : '',
-    ]
-      .filter(Boolean)
-      .join(' · ');
-
-    onSubmit({
-      skill_id: skillId || (skillsList[0]?.id || 'skill-1'),
-      title: finalTitle,
-      description: fullDescription,
+    const payload = {
+      skill_id: matchedSkill.id,
+      title: jobTitle,
+      description: description || `${jobTitle} needed at ${locality}`,
       workers_required: workersRequired,
-      wage,
+      wage: Number(wage),
       food_provided: foodProvided,
-      job_date: jobDate,
-      start_time: startTime,
-      end_time: endTime,
-      locality: fullLocality,
-      latitude: userCoordinates?.latitude,
-      longitude: userCoordinates?.longitude,
-    });
-  };
+      job_date: finalDate,
+      start_time: startTimeStr || '09:00',
+      end_time: endTimeStr || '18:00',
+      locality: locality,
+      latitude: userCoordinates?.latitude || 31.6340,
+      longitude: userCoordinates?.longitude || 74.8723,
+    };
 
-  const currentTrade = TRADE_OPTIONS.find((t) => t.key === selectedTradeKey);
+    onSubmit(payload);
+  };
 
   return (
-    <BottomSheet
-      isOpen={isOpen}
-      onClose={onClose}
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>{t.postJobTitle}</span>
-          <Badge variant="primary">Step {step} of 5</Badge>
+    <div className="fullscreen-view" role="dialog" aria-modal="true">
+      {/* 1. Sticky Header with Stepper */}
+      <div className="fullscreen-header">
+        <button
+          type="button"
+          onClick={() => (step > 1 ? setStep((prev) => prev - 1) : onClose())}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 700 }}
+        >
+          <ArrowLeft size={18} />
+          <span>{step > 1 ? (lang === 'hi' ? 'पीछे' : 'Back') : (lang === 'hi' ? 'रद्द करें' : 'Cancel')}</span>
+        </button>
+
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+            {lang === 'hi' ? 'नया काम पोस्ट करें' : 'Post a Job'}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            {lang === 'hi' ? `कदम ${step} / 5` : `Step ${step} of 5`}
+          </div>
         </div>
-      }
-      subtitle={
-        preSelectedWorkerName
-          ? lang === 'hi'
-            ? `${preSelectedWorkerName} के लिए जॉब पोस्ट`
-            : `Request for ${preSelectedWorkerName}`
-          : lang === 'hi'
-          ? 'स्थानीय कामगारों के लिए 60 सेकंड में पोस्ट करें'
-          : 'Reach nearby verified workers in 60s'
-      }
-    >
-      <div className="wizard-steps-container">
-        {/* 5-Segment Progress Bar */}
-        <div className="wizard-progress-bar">
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Stepper Progress Bar */}
+      <div style={{ padding: '0 16px', background: 'var(--bg-surface)' }}>
+        <div className="stepper-bar">
           {[1, 2, 3, 4, 5].map((s) => (
             <div
               key={s}
-              className={`wizard-progress-segment ${
-                s === step ? 'active' : s < step ? 'completed' : ''
-              }`}
+              className={`stepper-step ${s <= step ? 'completed' : ''}`}
             />
           ))}
         </div>
+      </div>
 
-        {/* STEP 1: AAPKO KIS KAAM KE LIYE WORKER CHAHIYE? */}
+      {/* 2. Step Views */}
+      <div style={{ flex: 1, padding: '24px 16px', maxWidth: '540px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
+        {/* STEP 1: What work? */}
         {step === 1 && (
-          <div className="wizard-step-body">
-            <div className="wizard-header-prompt">
-              <span className="wizard-step-badge">Step 1</span>
-              <h3 className="wizard-question">{t.step1Title}</h3>
-              <p className="wizard-question-sub">{t.step1Sub}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {lang === 'hi' ? 'आपको किस काम के लिए मदद चाहिए?' : 'What work do you need help with?'}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {lang === 'hi' ? 'श्रेणी चुनें ताकि पास के सही कामगारों को तुरंत सूचना मिले' : 'Choose a category to notify the right nearby workers'}
+              </p>
             </div>
 
-            <div className="trade-choice-grid">
-              {TRADE_OPTIONS.map((opt) => {
-                const isSelected = selectedTradeKey === opt.key;
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+              {CATEGORIES.map((cat) => {
+                const isSelected = selectedCategoryKey === cat.key;
                 return (
-                  <div
-                    key={opt.key}
-                    className={`trade-choice-card ${isSelected ? 'selected' : ''}`}
-                    onClick={() => {
-                      setSelectedTradeKey(opt.key);
-                      setWage(opt.defaultWage);
-                      const matchedSkill = skillsList.find((s) =>
-                        s.name.toLowerCase().includes(opt.key)
-                      );
-                      if (matchedSkill) setSkillId(matchedSkill.id);
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => handleSelectCategory(cat)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '14px 12px',
+                      backgroundColor: isSelected ? 'var(--brand-accent-subtle)' : 'var(--bg-subtle)',
+                      border: `1.5px solid ${isSelected ? 'var(--brand-accent)' : 'var(--border-subtle)'}`,
+                      borderRadius: 'var(--radius-md)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
-                    role="button"
-                    tabIndex={0}
                   >
-                    {isSelected && (
-                      <div className="trade-card-selected-check">
-                        <Check size={12} strokeWidth={3} />
+                    <div style={{ color: isSelected ? 'var(--brand-accent-hover)' : 'var(--text-primary)' }}>
+                      {cat.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {lang === 'hi' ? cat.nameHi : cat.nameEn}
                       </div>
-                    )}
-                    <div className={`service-icon-container ${opt.iconClass}`}>
-                      {opt.icon}
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                        ₹{cat.defaultWage}/{lang === 'hi' ? 'दिन' : 'day'}
+                      </div>
                     </div>
-                    <div className="trade-choice-name">
-                      {lang === 'hi' ? opt.nameHi : opt.nameEn}
-                    </div>
-                    <div className="trade-choice-sub">
-                      {lang === 'hi' ? opt.subHi : opt.subEn}
-                    </div>
-                  </div>
+                  </button>
                 );
               })}
-            </div>
-
-            <div style={{ marginTop: '12px' }}>
-              <Input
-                label={lang === 'hi' ? 'काम का विवरण / शीर्षक (ऐच्छिक)' : 'Job Title / Specific Task (Optional)'}
-                placeholder={
-                  lang === 'hi'
-                    ? 'जैसे: पंखा रिपेयर या 2 कमरों की पुताई'
-                    : 'e.g., Ceiling fan repair or 2-room painting'
-                }
-                value={customTitle}
-                onChange={(e) => setCustomTitle(e.target.value)}
-              />
             </div>
           </div>
         )}
 
-        {/* STEP 2: KAAM KAHAN HAI? */}
+        {/* STEP 2: Tell us about the work */}
         {step === 2 && (
-          <div className="wizard-step-body">
-            <div className="wizard-header-prompt">
-              <span className="wizard-step-badge">Step 2</span>
-              <h3 className="wizard-question">{t.step2Title}</h3>
-              <p className="wizard-question-sub">{t.step2Sub}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {lang === 'hi' ? 'काम के बारे में थोड़ा बताएं' : 'Tell us about the work'}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {lang === 'hi' ? 'कार्य का शीर्षक और संक्षिप्त विवरण दें' : 'Give a clear title and brief description'}
+              </p>
             </div>
 
-            {/* Option A: Use Current Location (GPS) */}
-            <div
-              className={`gps-location-btn ${isGpsActive ? 'active' : ''}`}
-              onClick={() => {
-                setIsGpsActive(true);
-                setLocality(userLocality);
-              }}
-              role="button"
-              tabIndex={0}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#34d399',
-                  }}
-                >
-                  <MapPin size={18} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#fff' }}>
-                    {t.useCurrentLocation}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: '#34d399' }}>
-                    ✓ {userLocality || 'Amritsar Central'}
-                  </div>
-                </div>
-              </div>
-              <Badge variant="success">GPS</Badge>
-            </div>
-
-            {/* Option B: Popular Localities */}
-            <div style={{ marginTop: '14px' }}>
-              <label className="ui-field-label">
-                {lang === 'hi' ? 'या प्रमुख इलाका चुनें' : 'Or select popular locality'}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                {lang === 'hi' ? 'काम का नाम' : 'Job Title'}
               </label>
-              <div className="locality-chips-wrapper">
-                {POPULAR_LOCALITIES.map((loc) => {
-                  const isSelected = locality === loc && !isGpsActive;
+              <input
+                type="text"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                placeholder="e.g. Electrician for Wiring Repair"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  backgroundColor: 'var(--bg-subtle)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.9rem',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                {lang === 'hi' ? 'विवरण (वैकल्पिक)' : 'Work Details (Optional)'}
+              </label>
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={lang === 'hi' ? 'जैसे: कमरे की वायरिंग ठीक करनी है, सीलिंग फैन लगाना है...' : 'e.g. Need to fix wiring fault in 2 rooms and install 1 ceiling fan...'}
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  backgroundColor: 'var(--bg-subtle)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.88rem',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  resize: 'none',
+                  fontFamily: 'inherit',
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: '12px' }}
+              onClick={() => setStep(3)}
+            >
+              <span>{lang === 'hi' ? 'आगे बढ़ें (स्थान और समय)' : 'Next: Location & Time'}</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* STEP 3: Where & When? */}
+        {step === 3 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {lang === 'hi' ? 'काम कहाँ और कब है?' : 'Where and when is the work?'}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {lang === 'hi' ? 'स्थान और काम शुरू करने का दिन चुनें' : 'Confirm your site location and schedule'}
+              </p>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                {lang === 'hi' ? 'कार्य स्थल (Locality / Area)' : 'Work Location'}
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', backgroundColor: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}>
+                <MapPin size={16} color="var(--brand-accent)" />
+                <input
+                  type="text"
+                  value={locality}
+                  onChange={(e) => setLocality(e.target.value)}
+                  placeholder="e.g. Ranjit Avenue, Block B"
+                  style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: '0.9rem', color: 'var(--text-primary)' }}
+                />
+              </div>
+            </div>
+
+            {/* Date Option */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                {lang === 'hi' ? 'काम का दिन' : 'When do you need workers?'}
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                {(['TODAY', 'TOMORROW', 'CUSTOM'] as const).map((opt) => {
+                  const isSelected = dateOption === opt;
+                  const label = opt === 'TODAY' ? (lang === 'hi' ? 'आज' : 'Today') : opt === 'TOMORROW' ? (lang === 'hi' ? 'कल' : 'Tomorrow') : (lang === 'hi' ? 'तारीख चुनें' : 'Pick Date');
                   return (
                     <button
-                      key={loc}
+                      key={opt}
                       type="button"
-                      className={`locality-select-chip ${isSelected ? 'selected' : ''}`}
-                      onClick={() => {
-                        setLocality(loc);
-                        setIsGpsActive(false);
+                      onClick={() => setDateOption(opt)}
+                      style={{
+                        padding: '10px',
+                        borderRadius: 'var(--radius-md)',
+                        border: `1.5px solid ${isSelected ? 'var(--brand-primary)' : 'var(--border-subtle)'}`,
+                        backgroundColor: isSelected ? 'var(--brand-primary)' : 'var(--bg-subtle)',
+                        color: isSelected ? 'var(--text-inverse)' : 'var(--text-primary)',
+                        fontWeight: 700,
+                        fontSize: '0.84rem',
+                        cursor: 'pointer',
                       }}
                     >
-                      {loc}
+                      {label}
                     </button>
                   );
                 })}
               </div>
-            </div>
 
-            {/* Specific Landmark / House */}
-            <div style={{ marginTop: '14px' }}>
-              <Input
-                label={lang === 'hi' ? 'लैंडमार्क / गली / मकान नं.' : 'Landmark / Street / House No.'}
-                placeholder={
-                  lang === 'hi'
-                    ? 'जैसे: नियर नोवेल्टी मॉल, गली नं. 3'
-                    : 'e.g., Near Novelty Mall, Street No. 3'
-                }
-                value={specificAddress}
-                onChange={(e) => setSpecificAddress(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: KAB CHAHIYE? */}
-        {step === 3 && (
-          <div className="wizard-step-body">
-            <div className="wizard-header-prompt">
-              <span className="wizard-step-badge">Step 3</span>
-              <h3 className="wizard-question">{t.step3Title}</h3>
-              <p className="wizard-question-sub">{t.step3Sub}</p>
-            </div>
-
-            <div className="timing-choice-grid">
-              {/* Today */}
-              <div
-                className={`timing-choice-card ${timingChoice === 'TODAY' ? 'selected' : ''}`}
-                onClick={() => handleTimingSelect('TODAY')}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ fontSize: '1.2rem' }}>⚡</div>
-                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{t.today}</div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Immediate</div>
-              </div>
-
-              {/* Tomorrow */}
-              <div
-                className={`timing-choice-card ${timingChoice === 'TOMORROW' ? 'selected' : ''}`}
-                onClick={() => handleTimingSelect('TOMORROW')}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ fontSize: '1.2rem' }}>📅</div>
-                <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{t.tomorrow}</div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Next day</div>
-              </div>
-
-              {/* Custom Date */}
-              <div
-                className={`timing-choice-card ${timingChoice === 'CUSTOM' ? 'selected' : ''}`}
-                onClick={() => handleTimingSelect('CUSTOM')}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ fontSize: '1.2rem' }}>🗓️</div>
-                <div style={{ fontWeight: 800, fontSize: '0.86rem' }}>{t.chooseDate}</div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Pick date</div>
-              </div>
-            </div>
-
-            {timingChoice === 'CUSTOM' && (
-              <div style={{ marginTop: '12px' }}>
-                <Input
+              {dateOption === 'CUSTOM' && (
+                <input
                   type="date"
-                  min={todayStr}
-                  value={jobDate}
-                  onChange={(e) => setJobDate(e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* Shift Timings */}
-            <div style={{ marginTop: '14px' }}>
-              <label className="ui-field-label">
-                {lang === 'hi' ? 'काम का समय / शिफ्ट' : 'Working Shift & Hours'}
-              </label>
-              <div className="shift-chips-row">
-                <div
-                  className={`shift-select-card ${shiftType === 'FULL_DAY' ? 'selected' : ''}`}
-                  onClick={() => handleShiftSelect('FULL_DAY')}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.86rem' }}>
-                      {lang === 'hi' ? 'पूरा दिन (Full Day)' : 'Full Day (8 Hours)'}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>09:00 AM - 06:00 PM</div>
-                  </div>
-                  <Badge variant="default">8 hrs</Badge>
-                </div>
-
-                <div
-                  className={`shift-select-card ${shiftType === 'MORNING' ? 'selected' : ''}`}
-                  onClick={() => handleShiftSelect('MORNING')}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.86rem' }}>
-                      {lang === 'hi' ? 'सुबह की शिफ्ट (Morning)' : 'Morning Shift (5 Hours)'}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>09:00 AM - 02:00 PM</div>
-                  </div>
-                  <Badge variant="default">5 hrs</Badge>
-                </div>
-
-                <div
-                  className={`shift-select-card ${shiftType === 'EVENING' ? 'selected' : ''}`}
-                  onClick={() => handleShiftSelect('EVENING')}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.86rem' }}>
-                      {lang === 'hi' ? 'शाम की शिफ्ट (Evening)' : 'Evening Shift (6 Hours)'}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>02:00 PM - 08:00 PM</div>
-                  </div>
-                  <Badge variant="default">6 hrs</Badge>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 4: KITNE PAISE DENGE? */}
-        {step === 4 && (
-          <div className="wizard-step-body">
-            <div className="wizard-header-prompt">
-              <span className="wizard-step-badge">Step 4</span>
-              <h3 className="wizard-question">{t.step4Title}</h3>
-              <p className="wizard-question-sub">{t.step4Sub}</p>
-            </div>
-
-            {/* Quick Wage Preset Chips */}
-            <div className="wage-presets-grid">
-              {[500, 650, 800, 1000].map((amount) => {
-                const isSelected = wage === amount && !isCustomWage;
-                return (
-                  <button
-                    key={amount}
-                    type="button"
-                    className={`wage-preset-btn ${isSelected ? 'selected' : ''}`}
-                    onClick={() => {
-                      setWage(amount);
-                      setIsCustomWage(false);
-                    }}
-                  >
-                    <span style={{ fontSize: '1.05rem', fontWeight: 900 }}>₹{amount}</span>
-                    <span style={{ fontSize: '0.68rem', opacity: 0.8 }}>
-                      {amount === 500
-                        ? lang === 'hi' ? 'हेल्पर' : 'Helper'
-                        : amount === 650
-                        ? lang === 'hi' ? 'मिस्त्री' : 'Standard'
-                        : amount === 800
-                        ? lang === 'hi' ? 'कारीगर' : 'Skilled'
-                        : lang === 'hi' ? 'स्पेशलिस्ट' : 'Heavy'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Custom Wage Toggle */}
-            <div style={{ marginTop: '10px' }}>
-              {!isCustomWage ? (
-                <button
-                  type="button"
-                  onClick={() => setIsCustomWage(true)}
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
                   style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#fbbf24',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
+                    width: '100%',
+                    marginTop: '8px',
+                    padding: '10px 12px',
+                    backgroundColor: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.88rem',
                   }}
-                >
-                  + {lang === 'hi' ? 'अन्य दिहाड़ी राशि भरें (Custom)' : 'Enter custom wage amount'}
-                </button>
-              ) : (
-                <Input
-                  type="number"
-                  step={50}
-                  min={300}
-                  label={t.dailyWageOffer}
-                  value={wage}
-                  onChange={(e) => setWage(Number(e.target.value))}
                 />
               )}
             </div>
 
-            {/* Workers Required Counter */}
-            <div style={{ marginTop: '16px' }}>
-              <label className="ui-field-label">{t.workersNeeded}</label>
-              <div className="workers-count-stepper">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Shift Timing */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                {lang === 'hi' ? 'समय / शिफ्ट' : 'Shift Hours'}
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {['09:00 - 18:00', '10:00 - 19:00', 'Half Day (4 hrs)'].map((shift) => (
                   <button
+                    key={shift}
                     type="button"
-                    className="stepper-btn"
-                    onClick={() => setWorkersRequired((prev) => Math.max(1, prev - 1))}
-                    disabled={workersRequired <= 1}
+                    onClick={() => setShiftTiming(shift)}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1px solid ${shiftTiming === shift ? 'var(--brand-accent)' : 'var(--border-subtle)'}`,
+                      backgroundColor: shiftTiming === shift ? 'var(--brand-accent-subtle)' : 'var(--bg-subtle)',
+                      color: shiftTiming === shift ? 'var(--brand-accent-hover)' : 'var(--text-secondary)',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
                   >
-                    <Minus size={16} />
+                    {shift}
                   </button>
-                  <span style={{ fontSize: '1.15rem', fontWeight: 800, minWidth: '24px', textAlign: 'center' }}>
-                    {workersRequired}
-                  </span>
-                  <button
-                    type="button"
-                    className="stepper-btn"
-                    onClick={() => setWorkersRequired((prev) => Math.min(10, prev + 1))}
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                    {lang === 'hi' ? 'कुल भुगतान' : 'Total payout'}
-                  </div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#34d399' }}>
-                    ₹{wage * workersRequired}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: '8px' }}
+              onClick={() => setStep(4)}
+            >
+              <span>{lang === 'hi' ? 'आगे बढ़ें (मजदूरी और संख्या)' : 'Next: Budget & Workers'}</span>
+              <ArrowRight size={16} />
+            </button>
           </div>
         )}
 
-        {/* STEP 5: NEED ANYTHING ELSE? (FINAL REVIEW & PSYCHOLOGICAL TRIGGER) */}
+        {/* STEP 4: Budget & Workers */}
+        {step === 4 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {lang === 'hi' ? 'मजदूरी और कामगारों की संख्या' : 'Budget and number of workers'}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {lang === 'hi' ? 'उचित दैनिक मजदूरी दें ताकि कामगार तुरंत स्वीकार करें' : 'Fair daily wages ensure faster worker acceptance'}
+              </p>
+            </div>
+
+            {/* Daily Wage Input */}
+            <div style={{ padding: '16px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-lg)' }}>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                {lang === 'hi' ? 'दैनिक मजदूरी (प्रति व्यक्ति)' : 'Daily Wage Offer (Per Worker)'}
+              </label>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>₹</span>
+                <input
+                  type="number"
+                  min={300}
+                  step={50}
+                  value={wage}
+                  onChange={(e) => setWage(Number(e.target.value))}
+                  style={{
+                    fontSize: '1.8rem',
+                    fontWeight: 800,
+                    color: 'var(--brand-primary)',
+                    background: 'none',
+                    border: 'none',
+                    outline: 'none',
+                    width: '160px',
+                  }}
+                />
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{lang === 'hi' ? '/ दिन' : '/ day'}</span>
+              </div>
+
+              {/* Quick Wage Preset Chips */}
+              <div style={{ display: 'flex', gap: '6px', marginTop: '12px' }}>
+                {[500, 600, 700, 800].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setWage(preset)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-full)',
+                      border: '1px solid var(--border-medium)',
+                      backgroundColor: wage === preset ? 'var(--brand-primary)' : '#ffffff',
+                      color: wage === preset ? 'var(--text-inverse)' : 'var(--text-primary)',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ₹{preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Workers Count Counter */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+              <div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {lang === 'hi' ? 'कामगारों की संख्या' : 'Number of Workers'}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                  {lang === 'hi' ? 'जितने कामगारों की आवश्यकता है' : 'How many helpers needed?'}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <button
+                  type="button"
+                  disabled={workersRequired <= 1}
+                  onClick={() => setWorkersRequired((prev) => Math.max(1, prev - 1))}
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--border-medium)',
+                    backgroundColor: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: workersRequired <= 1 ? 'not-allowed' : 'pointer',
+                    opacity: workersRequired <= 1 ? 0.4 : 1,
+                  }}
+                >
+                  <Minus size={16} />
+                </button>
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', minWidth: '20px', textAlign: 'center' }}>
+                  {workersRequired}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setWorkersRequired((prev) => prev + 1)}
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--border-medium)',
+                    backgroundColor: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Food Provided Checkbox */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={foodProvided}
+                onChange={(e) => setFoodProvided(e.target.checked)}
+                style={{ width: '18px', height: '18px', accentColor: 'var(--brand-primary)' }}
+              />
+              <span style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {lang === 'hi' ? 'भोजन / खाना दिया जाएगा (Food Provided)' : 'Food / Meals provided on site'}
+              </span>
+            </label>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: '8px' }}
+              onClick={() => setStep(5)}
+            >
+              <span>{lang === 'hi' ? 'समीक्षा करें (Review)' : 'Review & Confirm'}</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* STEP 5: Review & Post */}
         {step === 5 && (
-          <div className="wizard-step-body">
-            <div className="wizard-header-prompt">
-              <span className="wizard-step-badge">Step 5</span>
-              <h3 className="wizard-question">{t.step5Title}</h3>
-              <p className="wizard-question-sub">{t.step5Sub}</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {lang === 'hi' ? 'काम की समीक्षा करें और पोस्ट करें' : 'Review & Post Your Job'}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {lang === 'hi' ? 'पास के कामगारों को तुरंत सूचना भेजी जाएगी' : 'Nearby workers will be notified immediately'}
+              </p>
             </div>
 
-            {/* 3 Interactive Requirement Cards */}
-            <div className="addon-requirements-list">
-              {/* Food Provided */}
-              <div
-                className={`addon-requirement-card ${foodProvided ? 'selected' : ''}`}
-                onClick={() => setFoodProvided(!foodProvided)}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div className="addon-checkbox">
-                    {foodProvided && <Check size={14} strokeWidth={3} />}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>
-                      {t.provideFood}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                      {lang === 'hi'
-                        ? 'खाना मिलने पर कामगार तेजी से आवेदन करते हैं'
-                        : 'Workers apply faster when meals are provided'}
-                    </div>
-                  </div>
+            {/* Summary Card */}
+            <div style={{ padding: '16px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '10px' }}>
+                <div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>{jobTitle}</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{locality}</div>
                 </div>
-                <Badge variant="success">
-                  {foodProvided ? (lang === 'hi' ? 'हाँ' : 'Yes') : (lang === 'hi' ? 'नहीं' : 'No')}
-                </Badge>
-              </div>
-
-              {/* Materials Provided */}
-              <div
-                className={`addon-requirement-card ${materialsProvided ? 'selected' : ''}`}
-                onClick={() => setMaterialsProvided(!materialsProvided)}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div className="addon-checkbox">
-                    {materialsProvided && <Check size={14} strokeWidth={3} />}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>
-                      {t.materialsProvided}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                      {lang === 'hi'
-                        ? 'काम का सामान या टूल्स ग्राहक देंगे'
-                        : 'Customer will supply repair parts / materials'}
-                    </div>
-                  </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)' }}>₹{wage}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{lang === 'hi' ? 'प्रति व्यक्ति/दिन' : 'per worker/day'}</div>
                 </div>
-                <Badge variant="info">
-                  {materialsProvided ? (lang === 'hi' ? 'हाँ' : 'Yes') : (lang === 'hi' ? 'नहीं' : 'No')}
-                </Badge>
               </div>
 
-              {/* Urgent Requirement */}
-              <div
-                className={`addon-requirement-card ${isUrgent ? 'selected' : ''}`}
-                onClick={() => setIsUrgent(!isUrgent)}
-                role="button"
-                tabIndex={0}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div className="addon-checkbox">
-                    {isUrgent && <Check size={14} strokeWidth={3} />}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>
-                      {t.urgentRequirement}
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                      {lang === 'hi'
-                        ? 'वर्कर लिस्ट में सबसे ऊपर दिखेगा'
-                        : 'Prioritized at the top of worker job feed'}
-                    </div>
-                  </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', fontSize: '0.82rem' }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>{lang === 'hi' ? 'दिन:' : 'Date:'}</span>{' '}
+                  <strong>{dateOption === 'TODAY' ? 'Today' : dateOption === 'TOMORROW' ? 'Tomorrow' : customDate}</strong>
                 </div>
-                <Badge variant="warning">
-                  {isUrgent ? (lang === 'hi' ? 'हाँ' : 'Yes') : (lang === 'hi' ? 'नहीं' : 'No')}
-                </Badge>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>{lang === 'hi' ? 'कामगार:' : 'Workers:'}</span>{' '}
+                  <strong>{workersRequired}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>{lang === 'hi' ? 'शिफ्ट:' : 'Shift:'}</span>{' '}
+                  <strong>{shiftTiming}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>{lang === 'hi' ? 'खाना:' : 'Food:'}</span>{' '}
+                  <strong>{foodProvided ? 'Yes' : 'No'}</strong>
+                </div>
               </div>
+
+              {description && (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', background: '#ffffff', padding: '8px 10px', borderRadius: 'var(--radius-sm)' }}>
+                  {description}
+                </div>
+              )}
             </div>
 
-            {/* Summary Box Preview */}
-            <div className="post-job-summary-box">
-              <div className="summary-item-row">
-                <span>{lang === 'hi' ? 'काम' : 'Work'}:</span>
-                <strong>{lang === 'hi' ? currentTrade?.nameHi : currentTrade?.nameEn}</strong>
-              </div>
-              <div className="summary-item-row">
-                <span>{lang === 'hi' ? 'स्थान' : 'Location'}:</span>
-                <strong>{locality}</strong>
-              </div>
-              <div className="summary-item-row">
-                <span>{lang === 'hi' ? 'तारीख व समय' : 'Date & Time'}:</span>
-                <strong>
-                  {timingChoice === 'TODAY' ? t.today : timingChoice === 'TOMORROW' ? t.tomorrow : jobDate} · {startTime} - {endTime}
-                </strong>
-              </div>
-              <div className="summary-item-row">
-                <span>{lang === 'hi' ? 'दिहाड़ी' : 'Offer'}:</span>
-                <strong style={{ color: '#fbbf24' }}>
-                  ₹{wage}/{lang === 'hi' ? 'दिन' : 'day'} ({workersRequired} {lang === 'hi' ? 'वर्कर' : 'worker'})
-                </strong>
-              </div>
-            </div>
-
-            {/* PSYCHOLOGICAL TRUST NOTIFICATION TRIGGER */}
-            <div className="workers-notified-banner">
-              <span className="beacon-pulse-dot" />
-              <span>{t.workersNearbyNotified}</span>
-            </div>
+            {/* Final Big CTA */}
+            <button
+              type="button"
+              disabled={loading}
+              className="btn btn-primary"
+              style={{ padding: '14px', fontSize: '1rem', marginTop: '12px' }}
+              onClick={handleFinalSubmit}
+            >
+              <Check size={18} />
+              <span>
+                {loading
+                  ? (lang === 'hi' ? 'पोस्ट हो रहा है...' : 'Broadcasting Job...')
+                  : (lang === 'hi' ? 'जॉब पोस्ट करें →' : 'Post Job Now →')}
+              </span>
+            </button>
           </div>
         )}
-
-        {/* Wizard Footer Navigation */}
-        <div className="wizard-nav-footer">
-          {step > 1 ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="lg"
-              leftIcon={<ArrowLeft size={16} />}
-              onClick={handleBack}
-            >
-              {t.previousStep}
-            </Button>
-          ) : (
-            <Button type="button" variant="ghost" size="lg" onClick={onClose}>
-              {lang === 'hi' ? 'रद्द करें' : 'Cancel'}
-            </Button>
-          )}
-
-          {step < 5 ? (
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              rightIcon={<ArrowRight size={16} />}
-              onClick={handleNext}
-            >
-              {t.nextStep}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="primary"
-              size="lg"
-              leftIcon={<Zap size={18} />}
-              onClick={handleFinalSubmit}
-              isLoading={loading}
-            >
-              {t.submitJob}
-            </Button>
-          )}
-        </div>
       </div>
-    </BottomSheet>
+    </div>
   );
 };

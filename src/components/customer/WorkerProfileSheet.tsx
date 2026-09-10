@@ -6,14 +6,13 @@ import {
   MapPin,
   ShieldCheck,
   CheckCircle2,
-  Briefcase,
+  Clock,
   Phone,
+  ArrowLeft,
+  X,
   Zap,
-  ThumbsUp,
-  Award,
 } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
-import { BottomSheet, Avatar, Badge, Button } from '@/components/ui';
 import { NearbyWorker, getWorkerTradeDetails } from './WorkerCard';
 
 interface WorkerProfileSheetProps {
@@ -36,156 +35,213 @@ export const WorkerProfileSheet: React.FC<WorkerProfileSheetProps> = ({
   const trade = getWorkerTradeDetails(worker.skills, lang);
 
   return (
-    <BottomSheet
-      isOpen={isOpen}
-      onClose={onClose}
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>{t.workerProfileTitle}</span>
-          <Badge variant="verified" icon={<ShieldCheck size={14} />}>
-            {lang === 'hi' ? 'सत्यापित' : 'Verified'}
-          </Badge>
-        </div>
-      }
-      subtitle={t.safetyGuarantee}
-      footer={
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: '10px' }}>
-          <Button variant="secondary" size="lg" onClick={onClose}>
-            {lang === 'hi' ? 'बंद करें' : 'Close'}
-          </Button>
+    <div className="fullscreen-view" role="dialog" aria-modal="true">
+      {/* 1. Header */}
+      <div className="fullscreen-header">
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 700 }}
+        >
+          <ArrowLeft size={18} />
+          <span>{lang === 'hi' ? 'वापस' : 'Back'}</span>
+        </button>
 
-          <Button
-            variant="primary"
-            size="lg"
-            leftIcon={<Zap size={17} />}
-            onClick={() => {
-              onClose();
-              onHireWorker(worker);
-            }}
-          >
-            {lang === 'hi' ? `${worker.name} को काम दें` : `Hire ${worker.name}`}
-          </Button>
-        </div>
-      }
-    >
-      {/* Worker Hero Summary Card */}
-      <div className="worker-hero-profile-card">
-        <Avatar name={worker.name} size="lg" isVerified={true} />
-
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
-            {worker.name}
-          </div>
-          <div className="worker-prominent-trade" style={{ color: '#fbbf24' }}>
-            <span className="trade-icon">{trade.icon}</span>
-            <span className="trade-title">{trade.name}</span>
-          </div>
-          <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '3px' }}>
-            <MapPin size={12} style={{ display: 'inline', marginRight: '3px' }} />
-            {worker.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'} · {worker.locality}, {worker.city}
-          </div>
+        <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+          {lang === 'hi' ? 'कारीगर प्रोफ़ाइल' : 'Worker Profile'}
         </div>
 
-        <div className="profile-wage-box">
-          <div className="profile-wage-amount">₹{worker.expected_wage}</div>
-          <div className="profile-wage-sub">{lang === 'hi' ? 'प्रति दिन' : 'per day'}</div>
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+        >
+          <X size={20} />
+        </button>
       </div>
 
-      {/* 1. Trust & Safety Verification Pillars */}
-      <section style={{ marginBottom: '16px' }} aria-label="Verification credentials">
-        <div className="sheet-section-title">
-          <ShieldCheck size={16} color="#34d399" />
-          <span>{lang === 'hi' ? 'सुरक्षा व सत्यापन प्रमाण' : 'Trust & Safety Verification'}</span>
-        </div>
-
-        <div className="trust-credentials-box">
-          {/* Phone Verified */}
-          <div className="trust-cred-row">
-            <div className="trust-cred-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
-              <Phone size={15} />
-            </div>
-            <div>
-              <div className="trust-cred-title">
-                <span>{lang === 'hi' ? 'फोन नंबर सत्यापित (OTP Verified)' : 'Phone Verified (OTP)'}</span>
-                <span style={{ color: '#34d399', fontSize: '0.74rem' }}>✓ Active</span>
-              </div>
-              <div className="trust-cred-sub">
-                {lang === 'hi'
-                  ? 'मोबाइल नंबर सक्रिय है और प्रत्यक्ष बुकिंग पर उपलब्ध होगा।'
-                  : 'Registered mobile number verified and unlocked upon booking.'}
-              </div>
-            </div>
+      {/* 2. Scrollable Body */}
+      <div style={{ flex: 1, padding: '20px 16px', maxWidth: '600px', width: '100%', margin: '0 auto' }}>
+        {/* Worker Hero Summary */}
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', paddingBottom: '18px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: 'var(--radius-full)',
+              backgroundColor: 'var(--brand-primary)',
+              color: 'var(--text-inverse)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.8rem',
+              fontWeight: 800,
+              flexShrink: 0,
+            }}
+          >
+            {worker.name ? worker.name.charAt(0).toUpperCase() : 'W'}
           </div>
 
-          {/* Local Area Resident */}
-          <div className="trust-cred-row">
-            <div className="trust-cred-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' }}>
-              <MapPin size={15} />
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {worker.name}
+              </h1>
+              <ShieldCheck size={18} color="var(--brand-success)" />
             </div>
-            <div>
-              <div className="trust-cred-title">
-                <span>{lang === 'hi' ? 'स्थानीय निवासी (Local Resident)' : 'Local Area Resident'}</span>
-                <span style={{ color: '#60a5fa', fontSize: '0.74rem' }}>{worker.locality}</span>
-              </div>
-              <div className="trust-cred-sub">
-                {lang === 'hi'
-                  ? `${worker.city} के स्थानीय निवासी — पास के कार्यस्थलों पर समय पर पहुंच सकते हैं।`
-                  : `Verified resident of ${worker.locality}, ${worker.city}. Close to your site.`}
-              </div>
-            </div>
-          </div>
 
-          {/* Track Record & Experience */}
-          <div className="trust-cred-row">
-            <div className="trust-cred-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
-              <Briefcase size={15} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.88rem' }}>
+              <span style={{ color: 'var(--brand-accent)' }}>{trade.icon}</span>
+              <span>{trade.name}</span>
             </div>
-            <div>
-              <div className="trust-cred-title">
-                <span>{worker.jobs_completed} {t.jobsCompleted}</span>
-                <span style={{ color: '#fbbf24', fontSize: '0.74rem', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                  <Star size={11} fill="#fbbf24" color="#fbbf24" /> {worker.rating} / 5.0
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              {worker.rating > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                  <span>{worker.rating.toFixed(1)}</span>
+                  <span>({worker.jobs_completed} {lang === 'hi' ? 'काम पूरे' : 'jobs completed'})</span>
                 </span>
-              </div>
-              <div className="trust-cred-sub">
-                {lang === 'hi'
-                  ? `${worker.experience_years} साल का अनुभव · ${worker.attendance_rate}% समय पर काम शुरू करने का रिकॉर्ड।`
-                  : `${worker.experience_years} yrs trade experience · ${worker.attendance_rate}% on-time arrival rate.`}
-              </div>
+              )}
             </div>
           </div>
         </div>
-      </section>
 
-      {/* 2. Customer Endorsement Badges */}
-      <section style={{ marginBottom: '16px' }} aria-label="Customer endorsements">
-        <div className="sheet-section-title">
-          <ThumbsUp size={16} color="#fbbf24" />
-          <span>{lang === 'hi' ? 'ग्राहकों द्वारा दी गई समीक्षाएं' : 'Customer Endorsement Highlights'}</span>
-        </div>
-        <div className="customer-feedback-tags">
-          <span className="feedback-tag">{lang === 'hi' ? 'समय के पाबंद (Punctual)' : 'Always on time'}</span>
-          <span className="feedback-tag">{lang === 'hi' ? 'साफ-सुथरा काम (Neat Work)' : 'Neat & tidy'}</span>
-          <span className="feedback-tag">{lang === 'hi' ? 'सभ्य व सुरक्षित व्यवहार (Polite & Safe)' : 'Polite behavior'}</span>
-          <span className="feedback-tag">{lang === 'hi' ? 'ईमानदार दिहाड़ी (Honest Wage)' : 'Fair & honest rate'}</span>
-        </div>
-      </section>
+        {/* Highlights Row */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '8px',
+            padding: '14px 0',
+            borderBottom: '1px solid var(--border-subtle)',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ padding: '8px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {lang === 'hi' ? 'दूरी' : 'Distance'}
+            </div>
+            <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
+              {worker.distance_km} km
+            </div>
+          </div>
 
-      {/* 3. Verified Skills Tags */}
-      <section style={{ marginBottom: '10px' }} aria-label="Skills">
-        <div className="sheet-section-title">
-          <Award size={16} color="#60a5fa" />
-          <span>{lang === 'hi' ? 'सत्यापित कार्य कौशल' : 'Verified Skills & Capabilities'}</span>
+          <div style={{ padding: '8px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {lang === 'hi' ? 'उपलब्धता' : 'Availability'}
+            </div>
+            <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--brand-success)', marginTop: '2px' }}>
+              {worker.availability === 'AVAILABLE_TODAY'
+                ? (lang === 'hi' ? 'आज उपलब्ध' : 'Available Today')
+                : (lang === 'hi' ? 'पूछें' : 'Contact')}
+            </div>
+          </div>
+
+          <div style={{ padding: '8px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {lang === 'hi' ? 'उपस्थिति दर' : 'Attendance'}
+            </div>
+            <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
+              {worker.attendance_rate || 98}%
+            </div>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {worker.skills.map((s) => (
-            <Badge key={s.id} variant="default" icon={<CheckCircle2 size={13} color="#34d399" />}>
-              {s.name}
-            </Badge>
-          ))}
+
+        {/* Trust Signals */}
+        <div style={{ padding: '16px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '10px' }}>
+            {lang === 'hi' ? 'सत्यापन और सुरक्षा' : 'Trust & Verification'}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <CheckCircle2 size={16} color="var(--brand-success)" />
+              <span style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                {lang === 'hi' ? 'ओटीपी सत्यापित मोबाइल नंबर' : 'Phone Number Verified via OTP'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Clock size={16} color="var(--brand-primary)" />
+              <span style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                {lang === 'hi' ? 'आमतौर पर 10 मिनट के अंदर उत्तर देता है' : 'Usually responds within 10 minutes'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <MapPin size={16} color="var(--brand-accent)" />
+              <span style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                {lang === 'hi' ? `${worker.locality || 'स्थानीय क्षेत्र'}, ${worker.city} का निवासी` : `Resident of ${worker.locality || 'Local Area'}, ${worker.city}`}
+              </span>
+            </div>
+          </div>
         </div>
-      </section>
-    </BottomSheet>
+
+        {/* Skills Chips */}
+        {worker.skills && worker.skills.length > 0 && (
+          <div style={{ padding: '16px 0' }}>
+            <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '10px' }}>
+              {lang === 'hi' ? 'कौशल और कार्य' : 'Skills & Specialization'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {worker.skills.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    backgroundColor: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-full)',
+                    padding: '6px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {s.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Sticky Bottom Action Bar */}
+      <div
+        style={{
+          position: 'sticky',
+          bottom: 0,
+          backgroundColor: 'var(--bg-surface)',
+          borderTop: '1px solid var(--border-subtle)',
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          maxWidth: '600px',
+          width: '100%',
+          margin: '0 auto',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+            ₹{worker.expected_wage}
+          </div>
+          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+            {lang === 'hi' ? 'प्रति दिन मजदूरी' : 'daily wage offer'}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ padding: '10px 24px', fontSize: '0.92rem' }}
+          onClick={() => {
+            onClose();
+            onHireWorker(worker);
+          }}
+        >
+          <Zap size={16} />
+          <span>{lang === 'hi' ? `${worker.name.split(' ')[0]} को काम दें` : `Hire ${worker.name.split(' ')[0]}`}</span>
+        </button>
+      </div>
+    </div>
   );
 };

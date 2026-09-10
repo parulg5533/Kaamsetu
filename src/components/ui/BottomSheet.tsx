@@ -37,34 +37,38 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
   return (
     <div
-      className="ui-sheet-overlay"
+      className="sheet-overlay"
       role="dialog"
       aria-modal="true"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="ui-sheet-container" style={{ maxHeight }}>
-        <div className="ui-sheet-handle" />
+      <div className="sheet-window" style={{ maxHeight }}>
+        <div className="sheet-drag-handle" />
 
-        <div className="ui-sheet-header">
-          <div className="ui-sheet-title-group">
-            <h2 className="ui-sheet-title">{title}</h2>
-            {subtitle && <div className="ui-sheet-subtitle">{subtitle}</div>}
+        <div className="sheet-header">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <h2 className="sheet-title">{title}</h2>
+            {subtitle && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                {subtitle}
+              </div>
+            )}
           </div>
           <button
             type="button"
-            className="ui-sheet-close-btn"
+            className="sheet-close-btn"
             onClick={onClose}
-            aria-label="Close dialog"
+            aria-label="Close sheet"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="ui-sheet-body">{children}</div>
+        <div className="sheet-body">{children}</div>
 
-        {footer && <div className="ui-sheet-footer">{footer}</div>}
+        {footer && <div className="sheet-footer">{footer}</div>}
       </div>
     </div>
   );

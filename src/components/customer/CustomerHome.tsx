@@ -9,17 +9,23 @@ import {
   Truck,
   Hammer,
   Utensils,
-  LayoutGrid,
-  Users,
-  Plus,
-  ClipboardList,
-  ChevronRight,
+  Map as MapIcon,
+  List as ListIcon,
+  Search,
+  X,
   UserX,
+  Star,
+  MapPin,
+  ShieldCheck,
+  Briefcase,
+  ChevronRight,
+  ClipboardList,
 } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
-import { Card, Badge, Button, SearchInput, EmptyState } from '@/components/ui';
 import { WorkerCard, NearbyWorker } from './WorkerCard';
 import { WorkerProfileSheet } from './WorkerProfileSheet';
+import { GoogleMap, MapMarkerItem } from '@/components/map/GoogleMap';
+import { BottomSheet } from '@/components/ui/BottomSheet';
 
 interface Skill {
   id: string;
@@ -50,104 +56,35 @@ interface CustomerHomeProps {
   skillsList: Skill[];
   workers: NearbyWorker[];
   customerJobs: CustomerJob[];
+  userLocation?: {
+    lat: number;
+    lng: number;
+    locality: string;
+    isLive: boolean;
+  };
   onOpenPostJob: () => void;
   onRequestHireWorker: (worker: NearbyWorker) => void;
   onViewApplicants: (job: CustomerJob) => void;
   loading: boolean;
 }
 
-interface CategoryMeta {
-  idKey: string;
+interface CategoryFilter {
+  key: string;
   nameEn: string;
   nameHi: string;
-  subEn: string;
-  subHi: string;
   icon: React.ReactNode;
-  iconClass: string;
   matchPattern: string;
 }
 
-const POPULAR_SERVICES: CategoryMeta[] = [
-  {
-    idKey: 'plumber',
-    nameEn: 'Plumber',
-    nameHi: 'नल मिस्त्री',
-    subEn: 'Pipe & Tap Repair',
-    subHi: 'पाइप व लीकेज',
-    icon: <Wrench size={22} />,
-    iconClass: 'service-icon-plumber',
-    matchPattern: 'plumber',
-  },
-  {
-    idKey: 'electrician',
-    nameEn: 'Electrician',
-    nameHi: 'बिजली मिस्त्री',
-    subEn: 'Wiring & Faults',
-    subHi: 'वायरिंग व पंखा',
-    icon: <Zap size={22} />,
-    iconClass: 'service-icon-electrician',
-    matchPattern: 'electrician',
-  },
-  {
-    idKey: 'cleaner',
-    nameEn: 'Cleaning',
-    nameHi: 'सफाई / हेल्पर',
-    subEn: 'House & Shop',
-    subHi: 'घर व दुकान सफाई',
-    icon: <Sparkles size={22} />,
-    iconClass: 'service-icon-cleaning',
-    matchPattern: 'cleaner',
-  },
-  {
-    idKey: 'painter',
-    nameEn: 'Painter',
-    nameHi: 'पेंटर व पुताई',
-    subEn: 'Whitewash & Color',
-    subHi: 'पुताई व डिस्टेंपर',
-    icon: <Paintbrush size={22} />,
-    iconClass: 'service-icon-painter',
-    matchPattern: 'paint',
-  },
-  {
-    idKey: 'helper',
-    nameEn: 'Loading / Shift',
-    nameHi: 'लोडिंग / पल्लेदार',
-    subEn: 'Heavy Goods & Labor',
-    subHi: 'सामान उठाना व शिफ्ट',
-    icon: <Truck size={22} />,
-    iconClass: 'service-icon-helper',
-    matchPattern: 'loading',
-  },
-  {
-    idKey: 'carpenter',
-    nameEn: 'Carpenter',
-    nameHi: 'बढ़ई / मिस्त्री',
-    subEn: 'Wood & Furniture',
-    subHi: 'लकड़ी व फर्नीचर',
-    icon: <Hammer size={22} />,
-    iconClass: 'service-icon-carpenter',
-    matchPattern: 'carpenter',
-  },
-  {
-    idKey: 'hospitality',
-    nameEn: 'Cook / Kitchen',
-    nameHi: 'रसोई / हेल्पर',
-    subEn: 'Cooking & Helper',
-    subHi: 'खाना व सहायक',
-    icon: <Utensils size={22} />,
-    iconClass: 'service-icon-hospitality',
-    matchPattern: 'restaurant',
-  },
-  {
-    idKey: 'all',
-    nameEn: 'All Services',
-    nameHi: 'सभी काम देखें',
-    subEn: 'Explore Everything',
-    subHi: 'सभी श्रेणियां',
-    icon: <LayoutGrid size={22} />,
-    iconClass: 'service-icon-all',
-    matchPattern: 'all',
-  },
+const CATEGORY_CHIPS: CategoryFilter[] = [
+  { key: 'all', nameEn: 'All Services', nameHi: 'सभी काम', icon: <Briefcase size={14} />, matchPattern: 'all' },
+  { key: 'electrician', nameEn: 'Electrician', nameHi: 'बिजली मिस्त्री', icon: <Zap size={14} />, matchPattern: 'electric' },
+  { key: 'plumber', nameEn: 'Plumber', nameHi: 'नल मिस्त्री', icon: <Wrench size={14} />, matchPattern: 'plumb' },
+  { key: 'cleaner', nameEn: 'Cleaner', nameHi: 'सफाई कर्मी', icon: <Sparkles size={14} />, matchPattern: 'clean' },
+  { key: 'painter', nameEn: 'Painter', nameHi: 'पेंटर', icon: <Paintbrush size={14} />, matchPattern: 'paint' },
+  { key: 'carpenter', nameEn: 'Carpenter', nameHi: 'बढ़ई', icon: <Hammer size={14} />, matchPattern: 'carpent' },
+  { key: 'helper', nameEn: 'Labour & Shift', nameHi: 'लोडिंग व मजदूर', icon: <Truck size={14} />, matchPattern: 'load' },
+  { key: 'cook', nameEn: 'Cook & Kitchen', nameHi: 'रसोइया', icon: <Utensils size={14} />, matchPattern: 'restaurant' },
 ];
 
 export const CustomerHome: React.FC<CustomerHomeProps> = ({
@@ -155,6 +92,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
   skillsList,
   workers,
   customerJobs,
+  userLocation = { lat: 31.6340, lng: 74.8723, locality: 'Amritsar', isLive: false },
   onOpenPostJob,
   onRequestHireWorker,
   onViewApplicants,
@@ -162,24 +100,27 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
 }) => {
   const t = translations[lang];
 
+  // View state: 'map' or 'list'
+  const [activeView, setActiveView] = useState<'map' | 'list'>('map');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string>('all');
+
+  // Worker Sheets
+  const [previewWorker, setPreviewWorker] = useState<NearbyWorker | null>(null);
   const [selectedWorkerForProfile, setSelectedWorkerForProfile] = useState<NearbyWorker | null>(null);
 
-  // Filter workers dynamically based on search query & selected category
+  // Filter workers based on search and category
   const filteredWorkers = workers.filter((w) => {
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
       query === '' ||
       w.name.toLowerCase().includes(query) ||
-      w.locality.toLowerCase().includes(query) ||
+      (w.locality && w.locality.toLowerCase().includes(query)) ||
       w.skills.some((s) => s.name.toLowerCase().includes(query));
 
-    if (selectedCategoryKey === 'all') {
-      return matchesSearch;
-    }
+    if (selectedCategoryKey === 'all') return matchesSearch;
 
-    const cat = POPULAR_SERVICES.find((c) => c.idKey === selectedCategoryKey);
+    const cat = CATEGORY_CHIPS.find((c) => c.key === selectedCategoryKey);
     const matchesCategory = cat
       ? w.skills.some((s) => s.name.toLowerCase().includes(cat.matchPattern))
       : true;
@@ -187,195 +128,312 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     return matchesSearch && matchesCategory;
   });
 
-  // Calculate total applicants waiting across all customer active jobs
-  const totalApplicantsCount = customerJobs.reduce(
-    (acc, job) => acc + (job.applicant_count || 0),
-    0
-  );
+  // Convert workers to Google Map markers
+  const mapMarkers: MapMarkerItem[] = filteredWorkers.map((w, idx) => {
+    // Distribute around center if coordinates are clustered
+    const offsetLat = (idx % 3 - 1) * 0.0035;
+    const offsetLng = (Math.floor(idx / 3) % 3 - 1) * 0.0035;
+    return {
+      id: w.id,
+      lat: userLocation.lat + offsetLat,
+      lng: userLocation.lng + offsetLng,
+      title: w.name,
+      priceLabel: `₹${w.expected_wage}`,
+      rating: w.rating,
+      subtitle: w.skills[0]?.name || 'Worker',
+      raw: w,
+    };
+  });
 
-  const selectedCategoryMeta = POPULAR_SERVICES.find((c) => c.idKey === selectedCategoryKey);
+  const handleSelectMapMarker = (marker: MapMarkerItem) => {
+    if (marker.raw) {
+      setPreviewWorker(marker.raw);
+    }
+  };
+
+  const totalApplicants = customerJobs.reduce((acc, j) => acc + (j.applicant_count || 0), 0);
 
   return (
-    <div className="customer-home-container">
-      {/* 1. EMOTIONAL HERO PROMPT & SEARCH INPUT */}
-      <div className="customer-search-section">
-        <div className="emotional-hero-header">
-          <h1 className="emotional-hero-title">{t.needHelpHeading}</h1>
-          <p className="emotional-hero-sub">{t.needHelpSub}</p>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      {/* 1. Prompt & Search Section */}
+      <div className="customer-hero">
+        <h1 className="hero-prompt-title">{t.needHelpHeading}</h1>
+        <p className="hero-prompt-sub">{t.needHelpSub}</p>
 
-        <SearchInput
-          placeholder={t.searchPlaceholder}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onClear={() => setSearchQuery('')}
-        />
-      </div>
-
-      {/* 2. VISUAL 2x4 SERVICE GRID WITH LUCIDE ICONS */}
-      <section className="service-grid-section" aria-label="Service categories">
-        <div className="service-grid-heading">
-          <span>{t.popularServicesHeading}</span>
-          {selectedCategoryKey !== 'all' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedCategoryKey('all')}
-              className="reset-filter-btn"
+        <div className="search-input-box">
+          <Search size={18} color="var(--text-muted)" />
+          <input
+            type="text"
+            placeholder={lang === 'hi' ? 'बिजली मिस्त्री, प्लंबर, पेंटर, हेल्पर खोजें...' : 'Search for electrician, plumber, cleaner, painter...'}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
             >
-              {lang === 'hi' ? 'सभी देखें (Reset)' : 'View All'}
-            </Button>
+              <X size={16} />
+            </button>
           )}
         </div>
+      </div>
 
-        <div className="service-grid">
-          {POPULAR_SERVICES.map((cat) => {
-            const isSelected = selectedCategoryKey === cat.idKey;
-            return (
-              <div
-                key={cat.idKey}
-                className={`service-grid-card ${isSelected ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedCategoryKey(isSelected && cat.idKey !== 'all' ? 'all' : cat.idKey);
-                }}
-                role="button"
-                tabIndex={0}
-                aria-pressed={isSelected}
-              >
-                <div className={`service-icon-container ${cat.iconClass}`}>
-                  {cat.icon}
-                </div>
-                <div className="service-card-title">
-                  {lang === 'hi' ? cat.nameHi : cat.nameEn}
-                </div>
-                <div className="service-card-sub">
-                  {lang === 'hi' ? cat.subHi : cat.subEn}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      {/* 2. Horizontally Scrollable Categories */}
+      <div className="category-scroll-container">
+        {CATEGORY_CHIPS.map((cat) => {
+          const isSelected = selectedCategoryKey === cat.key;
+          return (
+            <button
+              key={cat.key}
+              type="button"
+              className={`category-chip ${isSelected ? 'active' : ''}`}
+              onClick={() => setSelectedCategoryKey(isSelected && cat.key !== 'all' ? 'all' : cat.key)}
+            >
+              <span className="category-chip-icon">{cat.icon}</span>
+              <span>{lang === 'hi' ? cat.nameHi : cat.nameEn}</span>
+            </button>
+          );
+        })}
+      </div>
 
-      {/* 3. ACTIVE REQUESTS ALERT (Only when customer has open jobs) */}
+      {/* 3. Active Work Requests Alert (If any open jobs) */}
       {customerJobs.length > 0 && (
         <div
-          className="active-requests-alert"
           onClick={() => onViewApplicants(customerJobs[0])}
-          role="button"
-          tabIndex={0}
+          style={{
+            margin: '10px 16px 0 16px',
+            padding: '10px 14px',
+            backgroundColor: 'var(--bg-subtle)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+          }}
         >
-          <div className="active-requests-content">
-            <div className="alert-icon-wrap">
-              <ClipboardList size={20} color="#34d399" />
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ClipboardList size={18} color="var(--brand-success)" />
             <div>
-              <div className="alert-title">
-                {customerJobs.length} {t.activeRequestsPill}
+              <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {customerJobs.length} {lang === 'hi' ? 'सक्रिय काम की मांग' : 'Active Work Request(s)'}
               </div>
-              <div className="alert-sub">
-                {totalApplicantsCount > 0
-                  ? lang === 'hi'
-                    ? `${totalApplicantsCount} कामगारों ने आवेदन किया है · देखें`
-                    : `${totalApplicantsCount} workers applied · Tap to view`
-                  : lang === 'hi'
-                  ? 'आवेदन की प्रतीक्षा में...'
-                  : 'Waiting for applications...'}
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                {totalApplicants > 0
+                  ? (lang === 'hi' ? `${totalApplicants} कामगारों ने आवेदन किया है` : `${totalApplicants} workers applied · Tap to view`)
+                  : (lang === 'hi' ? 'आवेदन की प्रतीक्षा है...' : 'Waiting for nearby worker applications...')}
               </div>
             </div>
           </div>
-          <div className="alert-action-label">
-            <span>{t.viewApplicants}</span>
-            <ChevronRight size={15} />
+          <ChevronRight size={16} color="var(--text-muted)" />
+        </div>
+      )}
+
+      {/* 4. Map & List Mode Control Bar */}
+      <div className="map-control-bar">
+        <div className="nearby-count-title">
+          <span>{lang === 'hi' ? 'पास के कामगार' : 'Nearby Workers'}</span>
+          <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+            ({filteredWorkers.length})
+          </span>
+        </div>
+
+        <div className="view-toggle-group">
+          <button
+            type="button"
+            className={`view-toggle-btn ${activeView === 'map' ? 'active' : ''}`}
+            onClick={() => setActiveView('map')}
+          >
+            <MapIcon size={14} />
+            <span>Map</span>
+          </button>
+          <button
+            type="button"
+            className={`view-toggle-btn ${activeView === 'list' ? 'active' : ''}`}
+            onClick={() => setActiveView('list')}
+          >
+            <ListIcon size={14} />
+            <span>List</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 5. Main Content Area: Map View or List View */}
+      {activeView === 'map' && (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {/* Interactive Google Map with custom price markers */}
+          <GoogleMap
+            center={{ lat: userLocation.lat, lng: userLocation.lng }}
+            markers={mapMarkers}
+            selectedMarkerId={previewWorker?.id}
+            onSelectMarker={handleSelectMapMarker}
+            height="290px"
+          />
+
+          {/* Quick List Preview below map */}
+          <div className="feed-section">
+            <div className="section-headline-row">
+              <div className="section-headline">
+                {lang === 'hi' ? 'उपलब्ध कामगार' : 'Available Today'}
+              </div>
+              <button
+                type="button"
+                className="section-link"
+                onClick={() => setActiveView('list')}
+              >
+                {lang === 'hi' ? 'पूरी सूची देखें →' : 'See all workers →'}
+              </button>
+            </div>
+
+            {loading ? (
+              <div>
+                <div className="skeleton-row" />
+                <div className="skeleton-row" />
+              </div>
+            ) : filteredWorkers.length === 0 ? (
+              <div className="empty-state-view">
+                <UserX size={28} className="empty-state-icon" />
+                <div className="empty-state-title">
+                  {lang === 'hi' ? 'इस श्रेणी में कोई कामगार नहीं मिला' : 'No workers found nearby'}
+                </div>
+                <div className="empty-state-desc">
+                  {lang === 'hi' ? 'काम पोस्ट करें, पास के कामगार तुरंत आवेदन करेंगे।' : 'Post your work request and nearby workers will be notified instantly.'}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ marginTop: '8px' }}
+                  onClick={onOpenPostJob}
+                >
+                  {t.postJobButton}
+                </button>
+              </div>
+            ) : (
+              filteredWorkers.slice(0, 4).map((w) => (
+                <WorkerCard
+                  key={w.id}
+                  lang={lang}
+                  worker={w}
+                  onRequestHire={onRequestHireWorker}
+                  onViewProfile={(worker) => setSelectedWorkerForProfile(worker)}
+                />
+              ))
+            )}
           </div>
         </div>
       )}
 
-      {/* 4. PROMINENT "POST A JOB" HERO CARD */}
-      <div className="post-job-hero-card">
-        <div>
-          <div className="hero-text-title">{t.postJobCTA}</div>
-          <div className="hero-text-sub">{t.postJobDesc}</div>
-        </div>
-        <Button
-          variant="primary"
-          size="md"
-          leftIcon={<Plus size={16} />}
-          onClick={onOpenPostJob}
-        >
-          {t.postJobButton}
-        </Button>
-      </div>
-
-      {/* 5. WORKERS NEAR YOU SECTION */}
-      <section aria-label="Nearby workers">
-        <div className="section-header">
-          <div>
-            <div className="section-title">
-              <Users size={18} color="#f59e0b" />
-              <span>
-                {t.nearbyWorkersHeading.split(' (')[0]} ({filteredWorkers.length})
-              </span>
-            </div>
-            <div className="section-sub">
-              {selectedCategoryKey !== 'all' && selectedCategoryMeta
-                ? `${lang === 'hi' ? selectedCategoryMeta.nameHi : selectedCategoryMeta.nameEn} · `
-                : ''}
-              {t.nearbyWorkersSub}
-            </div>
-          </div>
-
-          {selectedCategoryKey !== 'all' && (
-            <Badge variant="warning">
-              {lang === 'hi' ? selectedCategoryMeta?.nameHi : selectedCategoryMeta?.nameEn}
-            </Badge>
-          )}
-        </div>
-
-        {/* 6. WORKERS FEED CONTENT */}
-        <div className="feed-content" style={{ paddingTop: 0 }}>
+      {/* List View: Full vertical results */}
+      {activeView === 'list' && (
+        <div className="feed-section" style={{ flex: 1 }}>
           {loading ? (
-            <>
-              <div className="skeleton-card" />
-              <div className="skeleton-card" />
-              <div className="skeleton-card" />
-            </>
+            <div>
+              <div className="skeleton-row" />
+              <div className="skeleton-row" />
+              <div className="skeleton-row" />
+            </div>
           ) : filteredWorkers.length === 0 ? (
-            <EmptyState
-              icon={<UserX size={26} />}
-              title={
-                selectedCategoryKey !== 'all' && selectedCategoryMeta
-                  ? lang === 'hi'
-                    ? `अभी ${selectedCategoryMeta.nameHi} के लिए 5 किमी में कोई वर्कर उपलब्ध नहीं है।`
-                    : `No ${selectedCategoryMeta.nameEn} currently available within 5 km.`
-                  : t.noWorkersFound
-              }
-              description={
-                lang === 'hi'
-                  ? 'सिर्फ 60 सेकंड में काम पोस्ट करें — पास के कामगार तुरंत सूचना प्राप्त करेंगे।'
-                  : 'Post your work request in 60s — nearby workers will be notified immediately.'
-              }
-              action={
-                <Button variant="primary" size="md" onClick={onOpenPostJob}>
-                  {t.postJobButton}
-                </Button>
-              }
-            />
+            <div className="empty-state-view">
+              <UserX size={32} className="empty-state-icon" />
+              <div className="empty-state-title">
+                {lang === 'hi' ? 'कोई कामगार उपलब्ध नहीं है' : 'No workers available right now'}
+              </div>
+              <div className="empty-state-desc">
+                {lang === 'hi'
+                  ? 'अपना काम पोस्ट करें — जैसे ही कोई कामगार उपलब्ध होगा, वह आवेदन करेगा।'
+                  : 'Post a job now — nearby workers will apply as soon as they become available.'}
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ marginTop: '8px' }}
+                onClick={onOpenPostJob}
+              >
+                {t.postJobButton}
+              </button>
+            </div>
           ) : (
-            filteredWorkers.map((worker) => (
+            filteredWorkers.map((w) => (
               <WorkerCard
-                key={worker.id}
+                key={w.id}
                 lang={lang}
-                worker={worker}
+                worker={w}
                 onRequestHire={onRequestHireWorker}
-                onViewProfile={(w) => setSelectedWorkerForProfile(w)}
+                onViewProfile={(worker) => setSelectedWorkerForProfile(worker)}
               />
             ))
           )}
         </div>
-      </section>
+      )}
 
-      {/* 7. VERIFIED WORKER TRUST PROFILE MODAL SHEET */}
+      {/* 6. Worker Quick Preview Bottom Sheet (Triggered by Map Marker Tap) */}
+      <BottomSheet
+        isOpen={Boolean(previewWorker)}
+        onClose={() => setPreviewWorker(null)}
+        title={previewWorker?.name || 'Worker Preview'}
+        subtitle={previewWorker?.locality ? `${previewWorker.locality} · ${previewWorker.distance_km} km away` : 'Nearby Worker'}
+        footer={
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                const w = previewWorker;
+                setPreviewWorker(null);
+                if (w) setSelectedWorkerForProfile(w);
+              }}
+            >
+              {lang === 'hi' ? 'प्रोफ़ाइल देखें' : 'View Profile'}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                const w = previewWorker;
+                setPreviewWorker(null);
+                if (w) onRequestHireWorker(w);
+              }}
+            >
+              {lang === 'hi' ? 'हायर करें' : 'Hire Now'}
+            </button>
+          </div>
+        }
+      >
+        {previewWorker && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {previewWorker.skills[0]?.name || 'Worker'}
+                </span>
+                <ShieldCheck size={16} color="var(--brand-success)" />
+              </div>
+
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
+                ₹{previewWorker.expected_wage}/{lang === 'hi' ? 'दिन' : 'day'}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '14px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                {previewWorker.rating} ({previewWorker.jobs_completed} {lang === 'hi' ? 'काम' : 'jobs'})
+              </span>
+              <span>·</span>
+              <span>{previewWorker.distance_km} km away</span>
+              <span>·</span>
+              <span style={{ color: 'var(--brand-success)', fontWeight: 600 }}>
+                {lang === 'hi' ? 'आज उपलब्ध' : 'Available Today'}
+              </span>
+            </div>
+          </div>
+        )}
+      </BottomSheet>
+
+      {/* 7. Worker Full Profile View */}
       <WorkerProfileSheet
         lang={lang}
         worker={selectedWorkerForProfile}

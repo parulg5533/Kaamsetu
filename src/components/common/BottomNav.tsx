@@ -1,106 +1,80 @@
 'use client';
 
 import React from 'react';
-import { Compass, Briefcase, PhoneCall, User } from 'lucide-react';
+import { Home, Briefcase, MessageSquare, User } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
 
-export type NavTab = 'EXPLORE' | 'MY_JOBS' | 'CALLS' | 'PROFILE';
+export type NavTab = 'EXPLORE' | 'MY_JOBS' | 'MESSAGES' | 'PROFILE';
 
 interface BottomNavProps {
   lang: Language;
+  userRole?: 'WORKER' | 'BUSINESS';
   activeTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   myJobsCount?: number;
-  unlockedCallsCount?: number;
+  messagesCount?: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   lang,
+  userRole = 'BUSINESS',
   activeTab,
   onSelectTab,
   myJobsCount = 0,
-  unlockedCallsCount = 0,
+  messagesCount = 0,
 }) => {
-  const t = translations[lang];
+  const isWorker = userRole === 'WORKER';
 
   return (
-    <nav className="bottom-nav-bar" aria-label="Main Navigation">
+    <nav className="bottom-nav" aria-label="Main Navigation">
+      {/* 1. Home */}
       <button
-        className={`bottom-nav-item ${activeTab === 'EXPLORE' ? 'active' : ''}`}
+        type="button"
+        className={`nav-item ${activeTab === 'EXPLORE' ? 'active' : ''}`}
         onClick={() => onSelectTab('EXPLORE')}
       >
-        <Compass size={20} />
-        <span>{t.navExplore}</span>
+        <Home size={20} />
+        <span>{lang === 'hi' ? 'होम' : 'Home'}</span>
       </button>
 
+      {/* 2. Jobs / Applications */}
       <button
-        className={`bottom-nav-item ${activeTab === 'MY_JOBS' ? 'active' : ''}`}
+        type="button"
+        className={`nav-item ${activeTab === 'MY_JOBS' ? 'active' : ''}`}
         onClick={() => onSelectTab('MY_JOBS')}
       >
         <div style={{ position: 'relative' }}>
           <Briefcase size={20} />
           {myJobsCount > 0 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-6px',
-                background: '#f59e0b',
-                color: '#000',
-                fontSize: '0.62rem',
-                fontWeight: 800,
-                width: '14px',
-                height: '14px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {myJobsCount}
-            </span>
+            <span className="nav-badge">{myJobsCount}</span>
           )}
         </div>
-        <span>{t.navMyJobs}</span>
+        <span>{isWorker ? (lang === 'hi' ? 'आवेदन' : 'Applications') : (lang === 'hi' ? 'मेरे काम' : 'Jobs')}</span>
       </button>
 
+      {/* 3. Messages & Coordination */}
       <button
-        className={`bottom-nav-item ${activeTab === 'CALLS' ? 'active' : ''}`}
-        onClick={() => onSelectTab('CALLS')}
+        type="button"
+        className={`nav-item ${activeTab === 'MESSAGES' ? 'active' : ''}`}
+        onClick={() => onSelectTab('MESSAGES')}
       >
         <div style={{ position: 'relative' }}>
-          <PhoneCall size={20} />
-          {unlockedCallsCount > 0 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-6px',
-                background: '#10b981',
-                color: '#fff',
-                fontSize: '0.62rem',
-                fontWeight: 800,
-                width: '14px',
-                height: '14px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {unlockedCallsCount}
-            </span>
+          <MessageSquare size={20} />
+          {messagesCount > 0 && (
+            <span className="nav-badge">{messagesCount}</span>
           )}
         </div>
-        <span>{t.navCalls}</span>
+        <span>{lang === 'hi' ? 'संदेश' : 'Messages'}</span>
       </button>
 
+      {/* 4. Profile */}
       <button
-        className={`bottom-nav-item ${activeTab === 'PROFILE' ? 'active' : ''}`}
+        type="button"
+        className={`nav-item ${activeTab === 'PROFILE' ? 'active' : ''}`}
         onClick={() => onSelectTab('PROFILE')}
       >
         <User size={20} />
-        <span>{t.navProfile}</span>
+        <span>{lang === 'hi' ? 'प्रोफ़ाइल' : 'Profile'}</span>
       </button>
     </nav>
   );

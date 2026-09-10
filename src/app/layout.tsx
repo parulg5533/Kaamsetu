@@ -1,9 +1,17 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'KaamSetu — Connecting Local Work with Local Workers',
-  description: 'Hyperlocal two-sided marketplace for informal and short-term daily wage labor.',
+  title: 'KaamSetu — Local Workers & Nearby Work Marketplace',
+  description: 'Connect with verified electricians, plumbers, painters, helpers, and local workers near you in seconds.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#ffffff',
 };
 
 export default function RootLayout({
@@ -14,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <main className="app-viewport">{children}</main>
+        <div className="app-container">
+          {children}
+        </div>
       </body>
     </html>
   );

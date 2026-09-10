@@ -1,9 +1,8 @@
 'use client';
 
 import React from 'react';
-import { MapPin, Clock, Utensils, CheckCircle2, Zap, Star } from 'lucide-react';
+import { MapPin, Clock, Utensils, Star, Zap, Check } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
-import { Card, Badge, StatusBadge, Button } from '@/components/ui';
 
 export interface NearbyJob {
   id: string;
@@ -23,10 +22,10 @@ export interface NearbyJob {
   business: {
     id: string;
     business_name: string;
-    business_type: string;
-    locality: string;
-    rating: number;
-    jobs_completed: number;
+    business_type?: string;
+    locality?: string;
+    rating?: number;
+    jobs_completed?: number;
   };
   my_application_status: string | null;
   application_id: string | null;
@@ -47,99 +46,112 @@ export const JobCard: React.FC<JobCardProps> = ({
 }) => {
   const t = translations[lang];
   const isApplied = job.my_application_status === 'APPLIED';
-  const isAccepted =
-    job.my_application_status === 'ACCEPTED' || job.my_application_status === 'COMPLETED';
-
-  // Compute clean duration
-  const getDurationHours = (start: string, end: string) => {
-    try {
-      const [startH] = start.split(':').map(Number);
-      const [endH] = end.split(':').map(Number);
-      if (!isNaN(startH) && !isNaN(endH)) {
-        const diff = endH - startH;
-        if (diff > 0) return `${diff} ${lang === 'hi' ? 'घंटे' : 'hours'}`;
-      }
-    } catch (e) {}
-    return `${start} - ${end}`;
-  };
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const isToday = job.job_date === todayStr;
-  const timingBadge = `${isToday ? (lang === 'hi' ? 'आज' : 'Today') : (lang === 'hi' ? 'कल' : 'Tomorrow')} • ${getDurationHours(job.start_time, job.end_time)}`;
+  const isAccepted = job.my_application_status === 'ACCEPTED';
 
   return (
-    <Card interactive elevation="glow" className="job-card" role="article" aria-label={`Job ${job.title}`}>
-      {/* 1. Header: Title, Customer info, Daily Wage */}
-      <div className="job-header">
+    <div className="job-item">
+      {/* Header: Title & Wage */}
+      <div className="job-header-row">
         <div>
           <h3 className="job-title">{job.title}</h3>
-          <div className="business-sub">
-            <span className="business-name">{job.business.business_name}</span>
-            <span className="bullet-sep">·</span>
-            <span className="business-rating">
-              <Star size={12} color="#f59e0b" fill="#f59e0b" />
-              {job.business.rating}
-            </span>
-            <span className="business-jobs">
-              ({job.business.jobs_completed} {t.jobsCompleted})
-            </span>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>{job.business.business_name}</span>
+            {job.business.rating && job.business.rating > 0 && (
+              <>
+                <span>·</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: 'var(--text-primary)', fontWeight: 700 }}>
+                  <Star size={11} fill="#f59e0b" color="#f59e0b" />
+                  {job.business.rating}
+                </span>
+              </>
+            )}
           </div>
         </div>
-        <div className="wage-badge">
-          ₹{job.wage}/{lang === 'hi' ? 'दिन' : 'day'}
+
+        <div style={{ textAlign: 'right' }}>
+          <div className="job-wage">₹{job.wage}</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{lang === 'hi' ? '/दिन' : '/day'}</div>
         </div>
       </div>
 
-      {/* 2. Metadata Chips (Distance, Timing, Meals) */}
-      <div className="job-meta-grid">
-        <Badge variant="info" icon={<MapPin size={13} />}>
-          {job.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'} ({job.locality})
-        </Badge>
-
-        <Badge variant="default" icon={<Clock size={13} />}>
-          {timingBadge}
-        </Badge>
-
+      {/* Meta details: Distance, shift hours, meals */}
+      <div className="job-meta-row">
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+          <MapPin size={12} color="var(--brand-accent)" />
+          <span>{job.distance_km} km ({job.locality})</span>
+        </span>
+        <span>·</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+          <Clock size={12} />
+          <span>{job.start_time} - {job.end_time}</span>
+        </span>
         {job.food_provided && (
-          <Badge variant="success" icon={<Utensils size={13} />}>
-            {t.foodProvided}
-          </Badge>
+          <>
+            <span>·</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--brand-success)' }}>
+              <Utensils size={12} />
+              <span>{lang === 'hi' ? 'खाना मिलेगा' : 'Food provided'}</span>
+            </span>
+          </>
         )}
       </div>
 
-      {/* 3. Job Description */}
       {job.description && (
-        <p className="job-description">{job.description}</p>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+          {job.description}
+        </p>
       )}
 
-      {/* 4. Action CTA */}
-      <div className="job-actions">
+      {/* Action Button */}
+      <div style={{ marginTop: '4px' }}>
         {isApplied ? (
-          <StatusBadge
-            status="applied"
-            label={t.appliedWaiting}
-            className="btn-status-full"
-          />
+          <div
+            style={{
+              padding: '8px 12px',
+              backgroundColor: 'var(--bg-subtle)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: 'var(--brand-accent-hover)',
+              textAlign: 'center',
+            }}
+          >
+            {lang === 'hi' ? 'आवेदन भेजा गया · स्वीकृति की प्रतीक्षा' : 'Applied · Waiting for customer'}
+          </div>
         ) : isAccepted ? (
-          <StatusBadge
-            status="confirmed"
-            label={t.jobConfirmed}
-            className="btn-status-full"
-          />
+          <div
+            style={{
+              padding: '8px 12px',
+              backgroundColor: 'var(--brand-success-subtle)',
+              border: '1px solid var(--brand-success)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              color: 'var(--brand-success)',
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+          >
+            <Check size={16} />
+            <span>{lang === 'hi' ? 'काम पक्का हुआ ✓' : 'Job Accepted & Confirmed ✓'}</span>
+          </div>
         ) : (
-          <Button
+          <button
             type="button"
-            variant="primary"
-            size="lg"
-            fullWidth
-            leftIcon={<Zap size={16} />}
+            className="btn btn-primary"
+            style={{ width: '100%', minHeight: '38px', fontSize: '0.86rem' }}
             onClick={() => onApply(job.id)}
             disabled={loading}
           >
-            {t.applyNow}
-          </Button>
+            <Zap size={15} />
+            <span>{lang === 'hi' ? 'आवेदन करें (Apply Now)' : 'Apply for this Job'}</span>
+          </button>
         )}
       </div>
-    </Card>
+    </div>
   );
 };
