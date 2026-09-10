@@ -34,6 +34,19 @@ async function main() {
   const sConstruction = await prisma.skill.create({
     data: { name: 'General Construction Helper', category: 'MANUAL', iconName: 'hammer' }
   });
+  const sElectrician = await prisma.skill.create({
+    data: { name: 'Electrician & Wiring', category: 'TECHNICAL', iconName: 'zap' }
+  });
+  const sPlumber = await prisma.skill.create({
+    data: { name: 'Plumber & Pipe Fitting', category: 'TECHNICAL', iconName: 'wrench' }
+  });
+  const sCarpenter = await prisma.skill.create({
+    data: { name: 'Carpenter & Woodwork', category: 'MANUAL', iconName: 'hammer' }
+  });
+  const sPainter = await prisma.skill.create({
+    data: { name: 'Painter & Whitewash', category: 'MANUAL', iconName: 'paint-brush' }
+  });
+
 
   // 2. Seed Businesses
   // Business 1: Sharma Restaurant
@@ -204,6 +217,68 @@ async function main() {
       { workerId: wGurpreet.userId, skillId: sShop.id }
     ]
   });
+
+  // Worker 4: Ramesh Kumar (Electrician)
+  const uRamesh = await prisma.user.create({
+    data: {
+      phone: '9876543213',
+      name: 'Ramesh Mistri',
+      role: 'WORKER'
+    }
+  });
+  const wRamesh = await prisma.workerProfile.create({
+    data: {
+      userId: uRamesh.id,
+      city: 'Amritsar',
+      locality: 'Putligarh',
+      latitude: 31.6380,
+      longitude: 74.8550,
+      experienceYears: 5.0,
+      expectedWage: 750,
+      availability: 'AVAILABLE_TODAY',
+      rating: 4.8,
+      ratingCount: 45,
+      jobsCompleted: 52,
+      attendanceRate: 96.0
+    }
+  });
+  await prisma.workerSkill.createMany({
+    data: [
+      { workerId: wRamesh.userId, skillId: sElectrician.id }
+    ]
+  });
+
+  // Worker 5: Jagjit Singh (Plumber)
+  const uJagjit = await prisma.user.create({
+    data: {
+      phone: '9876543214',
+      name: 'Jagjit Singh',
+      role: 'WORKER'
+    }
+  });
+  const wJagjit = await prisma.workerProfile.create({
+    data: {
+      userId: uJagjit.id,
+      city: 'Amritsar',
+      locality: 'Chheharta',
+      latitude: 31.6280,
+      longitude: 74.8390,
+      experienceYears: 4.0,
+      expectedWage: 700,
+      availability: 'AVAILABLE_TODAY',
+      rating: 4.7,
+      ratingCount: 38,
+      jobsCompleted: 41,
+      attendanceRate: 93.0
+    }
+  });
+  await prisma.workerSkill.createMany({
+    data: [
+      { workerId: wJagjit.userId, skillId: sPlumber.id },
+      { workerId: wJagjit.userId, skillId: sConstruction.id }
+    ]
+  });
+
 
   // 4. Seed Active Jobs
   const tomorrow = new Date();
