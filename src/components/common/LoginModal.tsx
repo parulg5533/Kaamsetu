@@ -36,6 +36,9 @@ interface LoginModalProps {
   onVerifyOtp: (e: React.FormEvent) => void;
   demoPersonas: DemoPersona[];
   onSelectDemoPersona: (personaKey: string) => void;
+  isDemoMode: boolean;
+  onToggleDemoMode: () => void;
+  onContinueAsGuest?: () => void;
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({
@@ -61,6 +64,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   onVerifyOtp,
   demoPersonas,
   onSelectDemoPersona,
+  isDemoMode,
+  onToggleDemoMode,
+  onContinueAsGuest,
 }) => {
   if (!isOpen) return null;
   const t = translations[lang];
@@ -262,25 +268,96 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </form>
           )}
 
-          {/* Quick Demo Shortcuts */}
-          <div className="login-divider">
-            {lang === 'hi' ? 'या डेमो प्रोफाइल से सीधे लॉगिन करें' : 'Or quick login with demo profile'}
-          </div>
-          <div className="demo-account-list">
-            {demoPersonas.map((p) => (
-              <button
-                key={p.id}
-                className="demo-account-btn"
-                onClick={() => onSelectDemoPersona(p.id)}
+          {/* Clear separation: Demo Mode vs Real User Mode */}
+          {isDemoMode ? (
+            <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: '#fbbf24',
+                  textAlign: 'center',
+                  marginBottom: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
               >
-                <span className="demo-role-emoji">{p.role === 'WORKER' ? '👷' : '🏠'}</span>
-                <div style={{ overflow: 'hidden' }}>
-                  <div className="demo-name">{p.name.split(' (')[0]}</div>
-                  <div className="demo-detail">{p.role === 'WORKER' ? (lang === 'hi' ? 'काम करने वाला' : 'Worker') : (lang === 'hi' ? 'काम देने वाला' : 'Customer')} · {p.locality.split(',')[0]}</div>
-                </div>
+                <span>🧪</span>
+                <span>{lang === 'hi' ? 'डेमो मोड — किसी भी प्रोफाइल से टेस्ट करें:' : 'Interactive Demo Mode — Select persona:'}</span>
+              </div>
+              <div className="demo-account-list">
+                {demoPersonas.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="demo-account-btn"
+                    onClick={() => onSelectDemoPersona(p.id)}
+                  >
+                    <span className="demo-role-emoji">{p.role === 'WORKER' ? '👷' : '🏠'}</span>
+                    <div style={{ overflow: 'hidden' }}>
+                      <div className="demo-name">{p.name.split(' (')[0]}</div>
+                      <div className="demo-detail">
+                        {p.role === 'WORKER' ? (lang === 'hi' ? 'काम करने वाला' : 'Worker') : (lang === 'hi' ? 'काम देने वाला' : 'Customer')} · {p.locality.split(',')[0]}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                <button
+                  type="button"
+                  onClick={onToggleDemoMode}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    fontSize: '0.76rem',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  {lang === 'hi' ? '← सामान्य फोन लॉगिन पर वापस जाएं' : '← Return to Real Phone Login'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+              {onContinueAsGuest && canClose && (
+                <button
+                  type="button"
+                  onClick={onContinueAsGuest}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {lang === 'hi' ? 'लॉगिन किए बिना काम देखें →' : 'Explore without signing in →'}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onToggleDemoMode}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.08)',
+                  border: '1px dashed rgba(245, 158, 11, 0.3)',
+                  color: '#fbbf24',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.74rem',
+                  cursor: 'pointer',
+                  marginTop: '4px',
+                }}
+              >
+                {t.enterDemoMode}
               </button>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

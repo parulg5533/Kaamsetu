@@ -77,6 +77,22 @@ export default function KaamSetuApp() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Environment Mode: Real User Mode (default) vs Demo Mode
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+
+  // Dynamic Geolocation with Graceful Pilot Cluster Fallback
+  const [userLocation, setUserLocation] = useState<{
+    lat: number;
+    lng: number;
+    locality: string;
+    isLive: boolean;
+  }>({
+    lat: 31.6340,
+    lng: 74.8723,
+    locality: 'Amritsar (Pilot)',
+    isLive: false,
+  });
+
   // Common Data
   const [skillsList, setSkillsList] = useState<any[]>([]);
 
@@ -130,7 +146,7 @@ export default function KaamSetuApp() {
     setLang((prev) => (prev === 'en' ? 'hi' : 'en'));
   };
 
-  // Switch Demo Persona
+  // Switch Demo Persona (Only used in Demo Mode)
   const switchPersona = useCallback(async (personaKey: string) => {
     const persona = DEMO_PERSONAS.find((p) => p.id === personaKey);
     if (!persona) return;
@@ -149,15 +165,20 @@ export default function KaamSetuApp() {
       });
       const data = await res.json();
       if (data.success) {
-        setCurrentUser({
+        const userObj = {
           id: data.user.id,
           name: data.user.name,
           phone: data.user.phone,
           role: data.user.role,
-        });
+        };
+        setCurrentUser(userObj);
         setToken(data.token);
         setActivePersonaKey(personaKey);
         setShowLoginModal(false);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('kaamsetu_user', JSON.stringify(userObj));
+          localStorage.setItem('kaamsetu_token', data.token);
+        }
       }
     } catch (err) {
       console.error('Failed to switch persona:', err);
@@ -166,7 +187,27 @@ export default function KaamSetuApp() {
     }
   }, []);
 
-  // Initial Load: Skills & Default Demo Persona
+  // 1. Dynamic Geolocation Detection with Fallback
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            locality: t.currentLocationGps,
+            isLive: true,
+          });
+        },
+        (err) => {
+          console.log('GPS not available, using default pilot cluster:', err.message);
+        },
+        { timeout: 7000, maximumAge: 60000 }
+      );
+    }
+  }, [t.currentLocationGps]);
+
+  // 2. Initial Setup: Load Skills, Check Real User Session or Demo Mode
   useEffect(() => {
     fetch('/api/v1/skills')
       .then((res) => res.json())
@@ -175,16 +216,58 @@ export default function KaamSetuApp() {
       })
       .catch((err) => console.error('Error loading skills:', err));
 
-    switchPersona('worker-rahul');
+    // Check URL or localStorage for Demo Mode flag
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const isDemoRequested = urlParams?.get('demo') === 'true' || urlParams?.get('demo') === '1';
+    const isDemoStored = typeof window !== 'undefined' && localStorage.getItem('kaamsetu_demo_mode') === 'true';
+    const demoActive = isDemoRequested || isDemoStored;
+    setIsDemoMode(demoActive);
+
+    // Check localStorage for persisted Real User Session
+    const savedUser = typeof window !== 'undefined' ? localStorage.getItem('kaamsetu_user') : null;
+    const savedToken = typeof window !== 'undefined' ? localStorage.getItem('kaamsetu_token') : null;
+
+    if (savedUser && savedToken) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        setCurrentUser(parsed);
+        setToken(savedToken);
+      } catch (e) {
+        localStorage.removeItem('kaamsetu_user');
+        localStorage.removeItem('kaamsetu_token');
+      }
+    } else if (demoActive) {
+      // In explicit Demo Mode without saved session, start with demo persona
+      switchPersona('worker-rahul');
+    } else {
+      // In Real User Mode without saved session, present onboarding / login
+      setShowLoginModal(true);
+    }
   }, [switchPersona]);
 
-  // Load Customer Data
+  // Toggle Demo Mode
+  const handleToggleDemoMode = () => {
+    setIsDemoMode((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('kaamsetu_demo_mode', next ? 'true' : 'false');
+      }
+      if (next && !currentUser) {
+        switchPersona('worker-rahul');
+      }
+      return next;
+    });
+  };
+
+  // Load Customer Data (Uses dynamic GPS userLocation)
   const loadCustomerData = useCallback(async () => {
     if (!currentUser || currentUser.role !== 'BUSINESS') return;
     setLoading(true);
     try {
-      // 1. Fetch Nearby Workers for Customer Discovery
-      const workersRes = await fetch('/api/v1/workers/nearby?lat=31.6375&lng=74.8780&max_distance=15.0');
+      // 1. Fetch Nearby Workers for Customer Discovery using dynamic coordinates
+      const workersRes = await fetch(
+        `/api/v1/workers/nearby?lat=${userLocation.lat}&lng=${userLocation.lng}&max_distance=25.0`
+      );
       const workersData = await workersRes.json();
       if (workersData.success) {
         setNearbyWorkers(workersData.workers || []);
@@ -201,9 +284,9 @@ export default function KaamSetuApp() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, userLocation]);
 
-  // Load Worker Data
+  // Load Worker Data (Uses dynamic GPS userLocation)
   const loadWorkerData = useCallback(async () => {
     if (!currentUser || currentUser.role !== 'WORKER') return;
     setLoading(true);
@@ -216,9 +299,9 @@ export default function KaamSetuApp() {
         setAvailability(profData.worker.availability);
       }
 
-      // 2. Fetch Nearby Jobs
+      // 2. Fetch Nearby Jobs using dynamic coordinates
       const jobsRes = await fetch(
-        `/api/v1/jobs/nearby?lat=31.6340&lng=74.8723&max_distance=15.0&worker_id=${currentUser.id}`
+        `/api/v1/jobs/nearby?lat=${userLocation.lat}&lng=${userLocation.lng}&max_distance=25.0&worker_id=${currentUser.id}`
       );
       const jobsData = await jobsRes.json();
       if (jobsData.success) {
@@ -236,7 +319,7 @@ export default function KaamSetuApp() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, [currentUser, userLocation]);
 
   useEffect(() => {
     if (currentUser?.role === 'BUSINESS') {
@@ -454,19 +537,24 @@ export default function KaamSetuApp() {
       });
       const data = await res.json();
       if (data.success) {
-        setCurrentUser({
+        const userObj = {
           id: data.user.id,
           name: data.user.name,
           phone: data.user.phone,
           role: data.user.role,
-        });
+        };
+        setCurrentUser(userObj);
         setToken(data.token);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('kaamsetu_user', JSON.stringify(userObj));
+          localStorage.setItem('kaamsetu_token', data.token);
+        }
         setShowLoginModal(false);
         setLoginStep('PHONE');
         setLoginPhone('');
         setLoginName('');
         setLoginOtp('');
-        showNotification(`Logged in as ${data.user.name}!`);
+        showNotification(lang === 'hi' ? `लॉगिन सफल: ${data.user.name}!` : `Logged in as ${data.user.name}!`);
       } else {
         setLoginError(data.error || 'Invalid OTP code');
       }
@@ -480,13 +568,17 @@ export default function KaamSetuApp() {
   const handleLogout = () => {
     setCurrentUser(null);
     setToken('');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('kaamsetu_user');
+      localStorage.removeItem('kaamsetu_token');
+    }
     setWorkerProfile(null);
     setNearbyJobs([]);
     setWorkerApplications([]);
     setCustomerJobs([]);
     setShowLoginModal(true);
     setLoginStep('PHONE');
-    showNotification('Logged out successfully');
+    showNotification(lang === 'hi' ? 'लॉगआउट कर दिया गया' : 'Logged out successfully');
   };
 
   // Unlocked Calls count (contacts unlocked)
@@ -497,43 +589,82 @@ export default function KaamSetuApp() {
 
   return (
     <>
-      {/* 1. TOP TESTING PERSONA SWITCHER BAR */}
-      <div className="role-switcher-bar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="role-tag">
-            <Sparkles size={14} />
-            KaamSetu
+      {/* 1. TOP TESTING PERSONA SWITCHER BAR (Visible ONLY in Demo Mode) */}
+      {isDemoMode && (
+        <div
+          className="role-switcher-bar"
+          style={{
+            background: 'linear-gradient(90deg, #78350f, #92400e)',
+            borderBottom: '1px solid #b45309',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              className="role-tag"
+              style={{
+                background: 'rgba(0,0,0,0.35)',
+                color: '#fbbf24',
+                borderColor: '#d97706',
+              }}
+            >
+              <Sparkles size={13} />
+              {t.demoModeActive}
+            </div>
+            {currentUser && (
+              <span style={{ fontSize: '0.74rem', color: '#fef3c7', fontWeight: 600 }}>
+                {currentUser.role === 'WORKER' ? '👷' : '🏠'} {currentUser.name}
+              </span>
+            )}
           </div>
-          {currentUser && (
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600 }}>
-              {currentUser.role === 'WORKER' ? '👷' : '🏠'} {currentUser.name}
-            </span>
-          )}
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <select
-            aria-label="Select Demo Persona"
-            className="role-select"
-            style={{ padding: '3px 8px', fontSize: '0.74rem' }}
-            value={activePersonaKey}
-            onChange={(e) => switchPersona(e.target.value)}
-          >
-            {DEMO_PERSONAS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.role === 'WORKER' ? '👷' : '🏠'} {p.name.split(' (')[0]}
-              </option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <select
+              aria-label="Select Demo Persona"
+              className="role-select"
+              style={{
+                padding: '3px 8px',
+                fontSize: '0.74rem',
+                background: '#451a03',
+                color: '#fef3c7',
+                borderColor: '#b45309',
+              }}
+              value={activePersonaKey}
+              onChange={(e) => switchPersona(e.target.value)}
+            >
+              {DEMO_PERSONAS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.role === 'WORKER' ? '👷' : '🏠'} {p.name.split(' (')[0]}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleToggleDemoMode}
+              style={{
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fde68a',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+              title={t.exitDemoMode}
+            >
+              ✕ {t.exitDemoMode}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Floating Status Notification */}
       {statusMessage && (
         <div
           style={{
             position: 'fixed',
-            top: '52px',
+            top: isDemoMode ? '52px' : '16px',
             left: '50%',
             transform: 'translateX(-50%)',
             background: 'rgba(16, 185, 129, 0.96)',
@@ -559,6 +690,8 @@ export default function KaamSetuApp() {
         lang={lang}
         onToggleLang={handleToggleLang}
         currentUser={currentUser}
+        localityName={userLocation.locality}
+        isGpsActive={userLocation.isLive}
         onOpenLogin={() => setShowLoginModal(true)}
         onLogout={handleLogout}
       />
@@ -797,8 +930,8 @@ export default function KaamSetuApp() {
                   {t.verifiedPhone}
                 </div>
                 <div className="trust-badge distance">
-                  <MapPin size={13} />
-                  {t.pilotLocality}
+                  <MapPin size={13} color={userLocation.isLive ? "#10b981" : "#f59e0b"} />
+                  {userLocation.locality || t.pilotLocality}
                 </div>
               </div>
 
@@ -808,7 +941,7 @@ export default function KaamSetuApp() {
                   style={{ background: 'var(--primary-light)', color: '#fbbf24', border: '1px solid var(--primary-border)' }}
                   onClick={() => setShowLoginModal(true)}
                 >
-                  {t.switchAccount}
+                  {currentUser ? t.switchAccount : t.login}
                 </button>
                 <button
                   className="btn-apply"
@@ -816,6 +949,24 @@ export default function KaamSetuApp() {
                   onClick={handleLogout}
                 >
                   {t.signOut}
+                </button>
+              </div>
+
+              {/* Developer / Demo Mode Switcher in Profile */}
+              <div style={{ textAlign: 'center', marginTop: '4px' }}>
+                <button
+                  type="button"
+                  onClick={handleToggleDemoMode}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: isDemoMode ? '#fbbf24' : '#64748b',
+                    fontSize: '0.74rem',
+                    cursor: 'pointer',
+                    padding: '4px',
+                  }}
+                >
+                  {isDemoMode ? `✓ ${t.demoModeActive}` : `🧪 ${t.enterDemoMode}`}
                 </button>
               </div>
             </div>
@@ -912,6 +1063,9 @@ export default function KaamSetuApp() {
         onVerifyOtp={handleVerifyOtp}
         demoPersonas={DEMO_PERSONAS}
         onSelectDemoPersona={(personaKey) => switchPersona(personaKey)}
+        isDemoMode={isDemoMode}
+        onToggleDemoMode={handleToggleDemoMode}
+        onContinueAsGuest={() => setShowLoginModal(false)}
       />
     </>
   );

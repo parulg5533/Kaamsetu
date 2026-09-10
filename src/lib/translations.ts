@@ -79,6 +79,15 @@ export const translations = {
     navMyJobs: 'My Work',
     navCalls: 'Contacts',
     navProfile: 'Account',
+
+    // Environment & Modes
+    demoModeActive: '🧪 Demo Mode Active',
+    exitDemoMode: 'Exit Demo',
+    enterDemoMode: 'Try Interactive Demo Mode',
+    realUserMode: 'Real User Mode',
+    currentLocationGps: 'Current Location (GPS)',
+    welcomeTitle: 'Welcome to KaamSetu',
+    welcomeSub: 'Find verified local workers or get daily work near you',
   },
   hi: {
     appName: 'कामसेतु',
@@ -158,5 +167,14 @@ export const translations = {
     navMyJobs: 'मेरे काम',
     navCalls: 'संपर्क',
     navProfile: 'खाता',
+
+    // Environment & Modes
+    demoModeActive: '🧪 डेमो मोड सक्रिय',
+    exitDemoMode: 'डेमो बंद करें',
+    enterDemoMode: 'डेमो मोड आज़माएं',
+    realUserMode: 'यूज़र मोड',
+    currentLocationGps: 'वर्तमान स्थान (GPS)',
+    welcomeTitle: 'कामसेतु में आपका स्वागत है',
+    welcomeSub: 'पास के सत्यापित कामगार खोजें या तुरंत रोज़गार पाएं',
   },
 };

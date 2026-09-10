@@ -11,6 +11,8 @@ interface HeaderProps {
     name: string;
     role: 'WORKER' | 'BUSINESS';
   } | null;
+  localityName?: string;
+  isGpsActive?: boolean;
   onOpenLogin: () => void;
   onLogout: () => void;
 }
@@ -19,6 +21,8 @@ export const Header: React.FC<HeaderProps> = ({
   lang,
   onToggleLang,
   currentUser,
+  localityName,
+  isGpsActive,
   onOpenLogin,
   onLogout,
 }) => {
@@ -60,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
           >
             <KeyRound size={12} />
-            {t.switchAccount}
+            {currentUser ? t.switchAccount : t.login}
           </button>
 
           {currentUser && (
@@ -94,8 +98,8 @@ export const Header: React.FC<HeaderProps> = ({
             {currentUser ? `${currentUser.name.split(' ')[0]} 👋` : t.appName}
           </div>
           <div className="user-loc-pill">
-            <MapPin size={12} color="#f59e0b" />
-            {t.pilotLocality}
+            <MapPin size={12} color={isGpsActive ? "#10b981" : "#f59e0b"} />
+            {localityName || t.pilotLocality}
           </div>
         </div>
 
