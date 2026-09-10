@@ -250,21 +250,43 @@ body {
 
 /* Customer Search Bar & Hero */
 .customer-search-section {
-  padding: 18px 20px 12px 20px;
+  padding: 16px 20px 8px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Emotional Prompt Header (Indian Consumer Style) */
+.emotional-hero-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.emotional-hero-title {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.emotional-hero-sub {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 .customer-search-bar {
   display: flex;
   align-items: center;
   background: var(--bg-card);
-  border: 2px solid var(--border-active);
+  border: 1.5px solid var(--border-active);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 11px 14px;
   gap: 10px;
   transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .customer-search-bar:focus-within {
@@ -284,6 +306,120 @@ body {
 
 .search-input::placeholder {
   color: var(--text-muted);
+}
+
+/* Indian Consumer Service Grid (Urban Company / WhatsApp Local style) */
+.service-grid-section {
+  padding: 8px 20px 14px 20px;
+}
+
+.service-grid-heading {
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px 8px;
+}
+
+@media (max-width: 380px) {
+  .service-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.service-grid-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 12px 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  gap: 6px;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.service-grid-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  background: var(--bg-surface);
+}
+
+.service-grid-card:active {
+  transform: scale(0.96);
+}
+
+.service-grid-card.active {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: var(--primary);
+  box-shadow: 0 0 16px -2px rgba(245, 158, 11, 0.35);
+}
+
+.service-icon-bubble {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  transition: transform 0.2s;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.service-grid-card:hover .service-icon-bubble {
+  transform: scale(1.1);
+}
+
+.service-grid-card.active .service-icon-bubble {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.service-card-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.service-card-sub {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  line-height: 1;
+}
+
+/* Active Requests Notification Strip (Non-intrusive) */
+.active-requests-alert {
+  margin: 0 20px 10px 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.active-requests-alert:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(5, 150, 105, 0.15) 100%);
 }
 
 /* Category Pills (Horizontal Scroll or Grid) */
@@ -330,6 +466,7 @@ body {
 
 /* Post a Job Hero Banner */
 .post-job-hero-card {
+  margin: 0 20px 12px 20px;
   background: linear-gradient(135deg, #1e293b 0%, #172554 100%);
   border: 1px solid rgba(59, 130, 246, 0.35);
   border-radius: var(--radius-md);

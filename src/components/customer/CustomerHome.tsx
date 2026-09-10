@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Plus, Briefcase, Users, Clock, MapPin, Sparkles, Filter } from 'lucide-react';
+import { Search, Plus, Briefcase, Users, Clock, MapPin, Sparkles, Filter, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
 import { WorkerCard, NearbyWorker } from './WorkerCard';
 
@@ -40,6 +40,91 @@ interface CustomerHomeProps {
   loading: boolean;
 }
 
+interface CategoryMeta {
+  idKey: string;
+  nameEn: string;
+  nameHi: string;
+  subEn: string;
+  subHi: string;
+  icon: string;
+  matchPattern: string;
+}
+
+const POPULAR_SERVICES: CategoryMeta[] = [
+  {
+    idKey: 'plumber',
+    nameEn: 'Plumber',
+    nameHi: 'नल मिस्त्री',
+    subEn: 'Pipe & Tap Repair',
+    subHi: 'पाइप व लीकेज',
+    icon: '🔧',
+    matchPattern: 'plumber',
+  },
+  {
+    idKey: 'electrician',
+    nameEn: 'Electrician',
+    nameHi: 'बिजली मिस्त्री',
+    subEn: 'Wiring & Faults',
+    subHi: 'वायरिंग व पंखा',
+    icon: '⚡',
+    matchPattern: 'electrician',
+  },
+  {
+    idKey: 'cleaner',
+    nameEn: 'Cleaning',
+    nameHi: 'सफाई / हेल्पर',
+    subEn: 'House & Shop',
+    subHi: 'घर व दुकान सफाई',
+    icon: '🧹',
+    matchPattern: 'cleaner',
+  },
+  {
+    idKey: 'painter',
+    nameEn: 'Painter',
+    nameHi: 'पेंटर व पुताई',
+    subEn: 'Whitewash & Color',
+    subHi: 'पुताई व डिस्टेंपर',
+    icon: '🎨',
+    matchPattern: 'paint',
+  },
+  {
+    idKey: 'helper',
+    nameEn: 'Loading / Shift',
+    nameHi: 'लोडिंग / पल्लेदार',
+    subEn: 'Heavy Goods & Labor',
+    subHi: 'सामान उठाना व शिफ्ट',
+    icon: '🚚',
+    matchPattern: 'loading',
+  },
+  {
+    idKey: 'carpenter',
+    nameEn: 'Carpenter',
+    nameHi: 'बढ़ई / मिस्त्री',
+    subEn: 'Wood & Furniture',
+    subHi: 'लकड़ी व फर्नीचर',
+    icon: '🔨',
+    matchPattern: 'carpenter',
+  },
+  {
+    idKey: 'hospitality',
+    nameEn: 'Cook / Kitchen',
+    nameHi: 'रसोई / हेल्पर',
+    subEn: 'Cooking & Helper',
+    subHi: 'खाना व सहायक',
+    icon: '🍽️',
+    matchPattern: 'restaurant',
+  },
+  {
+    idKey: 'all',
+    nameEn: 'All Services',
+    nameHi: 'सभी काम देखें',
+    subEn: 'Explore Everything',
+    subHi: 'सभी श्रेणियां',
+    icon: '⭐',
+    matchPattern: 'all',
+  },
+];
+
 export const CustomerHome: React.FC<CustomerHomeProps> = ({
   lang,
   skillsList,
@@ -53,10 +138,9 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
   const t = translations[lang];
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSkillId, setSelectedSkillId] = useState<string>('ALL');
-  const [activeTab, setActiveTab] = useState<'WORKERS' | 'MY_POSTS'>('WORKERS');
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string>('all');
 
-  // Filtered workers based on search query and category
+  // Filter workers dynamically based on search query & selected category
   const filteredWorkers = workers.filter((w) => {
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
@@ -65,16 +149,39 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
       w.locality.toLowerCase().includes(query) ||
       w.skills.some((s) => s.name.toLowerCase().includes(query));
 
-    const matchesCategory =
-      selectedSkillId === 'ALL' || w.skills.some((s) => s.id === selectedSkillId);
+    if (selectedCategoryKey === 'all') {
+      return matchesSearch;
+    }
+
+    const cat = POPULAR_SERVICES.find((c) => c.idKey === selectedCategoryKey);
+    const matchesCategory = cat
+      ? w.skills.some((s) => s.name.toLowerCase().includes(cat.matchPattern))
+      : true;
 
     return matchesSearch && matchesCategory;
   });
 
+  // Calculate total applicants waiting across all customer active jobs
+  const totalApplicantsCount = customerJobs.reduce(
+    (acc, job) => acc + (job.applicant_count || 0),
+    0
+  );
+
+  const selectedCategoryMeta = POPULAR_SERVICES.find((c) => c.idKey === selectedCategoryKey);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {/* 1. Search Bar */}
+      {/* 1. EMOTIONAL HERO PROMPT & SEARCH BAR */}
       <div className="customer-search-section">
+        <div className="emotional-hero-header">
+          <div className="emotional-hero-title">
+            {t.needHelpHeading}
+          </div>
+          <div className="emotional-hero-sub">
+            {t.needHelpSub}
+          </div>
+        </div>
+
         <div className="customer-search-bar">
           <Search size={18} color="#f59e0b" />
           <input
@@ -88,153 +195,182 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
             <button
               onClick={() => setSearchQuery('')}
               style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}
+              aria-label="Clear search"
             >
               ✕
             </button>
           )}
         </div>
+      </div>
 
-        {/* 2. Category Filter Pills */}
-        <div className="category-scroll-container">
-          <button
-            className={`category-chip ${selectedSkillId === 'ALL' ? 'active' : ''}`}
-            onClick={() => setSelectedSkillId('ALL')}
-          >
-            ⭐ {lang === 'hi' ? 'सभी श्रेणियां' : 'All Categories'}
-          </button>
-          {skillsList.map((skill) => (
+      {/* 2. VISUAL 2x4 SERVICE GRID (Urban Company / WhatsApp Local style) */}
+      <div className="service-grid-section">
+        <div className="service-grid-heading">
+          <span>{t.popularServicesHeading}</span>
+          {selectedCategoryKey !== 'all' && (
             <button
-              key={skill.id}
-              className={`category-chip ${selectedSkillId === skill.id ? 'active' : ''}`}
-              onClick={() => setSelectedSkillId(skill.id)}
+              onClick={() => setSelectedCategoryKey('all')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#fbbf24',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
             >
-              {skill.name}
+              {lang === 'hi' ? 'सभी देखें (Reset)' : 'View All'}
             </button>
-          ))}
+          )}
         </div>
 
-        {/* 3. Hero Quick Post Job Card */}
-        <div className="post-job-hero-card">
-          <div>
-            <div className="hero-text-title">{t.postJobCTA}</div>
-            <div className="hero-text-sub">{t.postJobDesc}</div>
-          </div>
-          <button
-            className="hero-action-btn"
-            onClick={onOpenPostJob}
-          >
-            <Plus size={16} />
-            {t.postJobButton}
-          </button>
-        </div>
-      </div>
-
-      {/* 4. Tab Switcher (Nearby Workers vs My Active Postings) */}
-      <div style={{ padding: '0 20px', display: 'flex', gap: '8px' }}>
-        <button
-          className={`avail-btn ${activeTab === 'WORKERS' ? 'active-today' : ''}`}
-          style={{ flex: 1, padding: '10px' }}
-          onClick={() => setActiveTab('WORKERS')}
-        >
-          👷 {t.nearbyWorkersHeading.split(' (')[0]} ({filteredWorkers.length})
-        </button>
-        <button
-          className={`avail-btn ${activeTab === 'MY_POSTS' ? 'active-tomorrow' : ''}`}
-          style={{ flex: 1, padding: '10px' }}
-          onClick={() => setActiveTab('MY_POSTS')}
-        >
-          📋 {t.activeJobsHeading} ({customerJobs.length})
-        </button>
-      </div>
-
-      {/* 5. Content Feed */}
-      <div className="feed-content">
-        {activeTab === 'WORKERS' ? (
-          loading ? (
-            <>
-              <div className="skeleton-card" />
-              <div className="skeleton-card" />
-              <div className="skeleton-card" />
-            </>
-          ) : filteredWorkers.length === 0 ? (
-            <div className="empty-state">
-              <Users size={36} />
-              <p style={{ fontWeight: 700 }}>{t.noWorkersFound}</p>
-              <button
-                className="btn-apply"
-                style={{ background: 'var(--primary)', color: '#000', padding: '8px 16px', fontSize: '0.84rem' }}
-                onClick={onOpenPostJob}
+        <div className="service-grid">
+          {POPULAR_SERVICES.map((cat) => {
+            const isSelected = selectedCategoryKey === cat.idKey;
+            return (
+              <div
+                key={cat.idKey}
+                className={`service-grid-card ${isSelected ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedCategoryKey(isSelected && cat.idKey !== 'all' ? 'all' : cat.idKey);
+                }}
+                role="button"
+                tabIndex={0}
               >
-                {t.postJobButton}
-              </button>
-            </div>
-          ) : (
-            filteredWorkers.map((worker) => (
-              <WorkerCard
-                key={worker.id}
-                lang={lang}
-                worker={worker}
-                onRequestHire={onRequestHireWorker}
-              />
-            ))
-          )
-        ) : (
-          /* My Active Job Postings */
-          customerJobs.length === 0 ? (
-            <div className="empty-state">
-              <Briefcase size={36} />
-              <p style={{ fontWeight: 700 }}>{t.noJobsPosted}</p>
-              <button
-                className="btn-apply"
-                style={{ background: 'var(--primary)', color: '#000', padding: '8px 16px', fontSize: '0.84rem' }}
-                onClick={onOpenPostJob}
-              >
-                {t.postJobButton}
-              </button>
-            </div>
-          ) : (
-            customerJobs.map((job) => (
-              <div key={job.id} className="job-card">
-                <div className="job-header">
-                  <div>
-                    <div className="job-title">{job.title}</div>
-                    <div className="business-sub">
-                      <MapPin size={12} />
-                      {job.locality} · {job.job_date}
-                    </div>
-                  </div>
-                  <div className="wage-badge">₹{job.wage}/{lang === 'hi' ? 'दिन' : 'day'}</div>
+                <div className="service-icon-bubble">
+                  {cat.icon}
                 </div>
-
-                <div className="job-meta-grid">
-                  <div className="meta-chip">
-                    <Clock size={12} />
-                    {job.start_time} - {job.end_time}
-                  </div>
-                  <div className="meta-chip">
-                    <Users size={12} />
-                    {lang === 'hi' ? 'जरूरत:' : 'Needed:'} {job.workers_required} · {lang === 'hi' ? 'स्वीकृत:' : 'Accepted:'} {job.workers_accepted}
-                  </div>
-                  {job.food_provided && (
-                    <div className="meta-chip food">
-                      🍲 {t.foodProvided}
-                    </div>
-                  )}
+                <div className="service-card-title">
+                  {lang === 'hi' ? cat.nameHi : cat.nameEn}
                 </div>
-
-                <div className="job-actions">
-                  <button
-                    className="btn-apply"
-                    style={{ background: '#3b82f6', color: '#fff' }}
-                    onClick={() => onViewApplicants(job)}
-                  >
-                    <Users size={16} />
-                    {t.viewApplicants} ({job.applicant_count})
-                  </button>
+                <div className="service-card-sub">
+                  {lang === 'hi' ? cat.subHi : cat.subEn}
                 </div>
               </div>
-            ))
-          )
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. ACTIVE REQUESTS ALERT (Only when customer has open jobs) */}
+      {customerJobs.length > 0 && (
+        <div
+          className="active-requests-alert"
+          onClick={() => onViewApplicants(customerJobs[0])}
+          role="button"
+          tabIndex={0}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.3rem' }}>📋</span>
+            <div>
+              <div style={{ fontSize: '0.86rem', fontWeight: 800, color: '#34d399' }}>
+                {customerJobs.length} {t.activeRequestsPill}
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#cbd5e1' }}>
+                {totalApplicantsCount > 0
+                  ? (lang === 'hi' ? `${totalApplicantsCount} कामगारों ने आवेदन किया है · देखें` : `${totalApplicantsCount} workers applied · Tap to view`)
+                  : (lang === 'hi' ? 'आवेदन की प्रतीक्षा में...' : 'Waiting for applications...')}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#34d399', fontWeight: 700, fontSize: '0.8rem' }}>
+            <span>{t.viewApplicants}</span>
+            <ChevronRight size={15} />
+          </div>
+        </div>
+      )}
+
+      {/* 4. PROMINENT "POST A JOB" HERO CARD */}
+      <div className="post-job-hero-card">
+        <div>
+          <div className="hero-text-title">{t.postJobCTA}</div>
+          <div className="hero-text-sub">{t.postJobDesc}</div>
+        </div>
+        <button
+          className="hero-action-btn"
+          onClick={onOpenPostJob}
+        >
+          <Plus size={16} />
+          {t.postJobButton}
+        </button>
+      </div>
+
+      {/* 5. WORKERS NEAR YOU SECTION */}
+      <div className="section-header">
+        <div>
+          <div className="section-title">
+            <Users size={18} color="#f59e0b" />
+            <span>
+              {t.nearbyWorkersHeading.split(' (')[0]} ({filteredWorkers.length})
+            </span>
+          </div>
+          <div className="section-sub">
+            {selectedCategoryKey !== 'all' && selectedCategoryMeta
+              ? `${lang === 'hi' ? selectedCategoryMeta.nameHi : selectedCategoryMeta.nameEn} · `
+              : ''}
+            {t.nearbyWorkersSub}
+          </div>
+        </div>
+
+        {selectedCategoryKey !== 'all' && (
+          <button
+            onClick={() => setSelectedCategoryKey('all')}
+            style={{
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              color: '#fbbf24',
+              borderRadius: '9999px',
+              padding: '4px 10px',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            ✕ {lang === 'hi' ? 'फ़िल्टर हटाएं' : 'Clear'}
+          </button>
+        )}
+      </div>
+
+      {/* 6. WORKERS FEED CONTENT */}
+      <div className="feed-content" style={{ paddingTop: 0 }}>
+        {loading ? (
+          <>
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+            <div className="skeleton-card" />
+          </>
+        ) : filteredWorkers.length === 0 ? (
+          <div className="empty-state">
+            <Users size={36} />
+            <p style={{ fontWeight: 700 }}>
+              {selectedCategoryKey !== 'all' && selectedCategoryMeta
+                ? (lang === 'hi'
+                    ? `अभी ${selectedCategoryMeta.nameHi} के लिए 5 किमी में कोई वर्कर उपलब्ध नहीं है।`
+                    : `No ${selectedCategoryMeta.nameEn} currently available within 5 km.`)
+                : t.noWorkersFound}
+            </p>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '4px 0 12px 0' }}>
+              {lang === 'hi'
+                ? 'सिर्फ 60 सेकंड में काम पोस्ट करें — पास के कामगार तुरंत सूचना प्राप्त करेंगे।'
+                : 'Post your work request in 60s — nearby workers will be notified immediately.'}
+            </p>
+            <button
+              className="btn-apply"
+              style={{ background: 'var(--primary)', color: '#000', padding: '10px 20px', fontSize: '0.86rem' }}
+              onClick={onOpenPostJob}
+            >
+              {t.postJobButton}
+            </button>
+          </div>
+        ) : (
+          filteredWorkers.map((worker) => (
+            <WorkerCard
+              key={worker.id}
+              lang={lang}
+              worker={worker}
+              onRequestHire={onRequestHireWorker}
+            />
+          ))
         )}
       </div>
     </div>
