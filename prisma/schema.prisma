@@ -1,0 +1,141 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  name      String
+  role      String   // "WORKER" | "BUSINESS" | "ADMIN"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workerProfile  WorkerProfile?
+  business       Business?
+  reviewsGiven    Review[]       @relation("ReviewsGiven")
+  reviewsReceived Review[]       @relation("ReviewsReceived")
+}
+
+model Skill {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String   @default("GENERAL") // "HOSPITALITY", "RETAIL", "LOGISTICS", "MANUAL"
+  iconName  String   @default("briefcase")
+  createdAt DateTime @default(now())
+
+  workerSkills WorkerSkill[]
+  jobs         Job[]
+}
+
+model WorkerProfile {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city            String
+  locality        String?
+  latitude        Float
+  longitude       Float
+  experienceYears Float    @default(0)
+  expectedWage    Float    // Daily wage in INR
+  availability    String   @default("AVAILABLE_TODAY") // "AVAILABLE_TODAY" | "AVAILABLE_TOMORROW" | "UNAVAILABLE"
+  rating          Float    @default(5.0)
+  ratingCount     Int      @default(0)
+  jobsCompleted   Int      @default(0)
+  attendanceRate  Float    @default(100.0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  skills       WorkerSkill[]
+  applications Application[]
+}
+
+model WorkerSkill {
+  workerId String
+  skillId  String
+  worker   WorkerProfile @relation(fields: [workerId], references: [userId], onDelete: Cascade)
+  skill    Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([workerId, skillId])
+}
+
+model Business {
+  userId        String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName  String
+  businessType  String   // e.g. "Restaurant", "Kirana Store", "Warehouse"
+  address       String
+  city          String
+  locality      String?
+  latitude      Float
+  longitude     Float
+  rating        Float    @default(5.0)
+  ratingCount   Int      @default(0)
+  jobsPosted    Int      @default(0)
+  jobsCompleted Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  jobs Job[]
+}
+
+model Job {
+  id              String   @id @default(uuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [userId], onDelete: Cascade)
+  skillId         String
+  skill           Skill    @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  title           String
+  description     String?
+  workersRequired Int      @default(1)
+  workersAccepted Int      @default(0)
+  wage            Float    // Daily wage in INR
+  foodProvided    Boolean  @default(false)
+  jobDate         String   // YYYY-MM-DD
+  startTime       String   // e.g. "10:00"
+  endTime         String   // e.g. "20:00"
+  locality        String?
+  latitude        Float
+  longitude       Float
+  status          String   @default("OPEN") // "OPEN" | "FILLED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  applications Application[]
+  reviews      Review[]
+}
+
+model Application {
+  id                         String        @id @default(uuid())
+  jobId                      String
+  job                        Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workerId                   String
+  worker                     WorkerProfile @relation(fields: [workerId], references: [userId], onDelete: Cascade)
+  status                     String        @default("APPLIED") // "APPLIED" | "ACCEPTED" | "REJECTED" | "WITHDRAWN"
+  workerConfirmedCompleted   Boolean       @default(false)
+  businessConfirmedCompleted Boolean       @default(false)
+  appliedAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+
+  @@unique([jobId, workerId])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromUserId  String
+  fromUser    User     @relation("ReviewsGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User     @relation("ReviewsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  rating      Int      // 1 to 5
+  feedbackTag String?  // e.g. "Punctual", "Hardworking", "Paid On Time"
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  @@unique([jobId, fromUserId, toUserId])
+}
