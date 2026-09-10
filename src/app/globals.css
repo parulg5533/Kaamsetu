@@ -2860,5 +2860,481 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ============================================================
+   LIVE COORDINATION TRACKER (The Pulse of KaamSetu)
+   ============================================================ */
+
+.live-coordination-container {
+  margin: 0 0 14px 0;
+  width: 100%;
+}
+
+.coordination-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.coordination-card.matching-stage {
+  background: linear-gradient(135deg, #1c1917 0%, #1e1b4b 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 22px rgba(245, 158, 11, 0.15);
+}
+
+.coordination-card.enroute-stage {
+  background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 22px rgba(16, 185, 129, 0.15);
+}
+
+.coordination-card.inprogress-stage {
+  background: linear-gradient(135deg, #1e1b4b 0%, #172554 100%);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 22px rgba(59, 130, 246, 0.15);
+}
+
+.coordination-card.settlement-stage {
+  background: linear-gradient(135deg, #14532d 0%, #1c1917 100%);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  box-shadow: 0 4px 22px rgba(34, 197, 94, 0.2);
+}
+
+.coordination-card.review-stage {
+  background: linear-gradient(135deg, #78350f 0%, #111827 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  box-shadow: 0 4px 22px rgba(245, 158, 11, 0.2);
+}
+
+.coordination-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.coordination-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coordination-stage-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.live-pulse-beacon {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+  animation: availPulse 1.8s infinite;
+}
+
+.live-pulse-beacon.green {
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+}
+
+.live-pulse-beacon.amber {
+  background: #fbbf24;
+  box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7);
+}
+
+/* Matching Radar Body */
+.matching-radar-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.radar-animation-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.radar-animation-circle::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  animation: radarRipple 2s linear infinite;
+}
+
+@keyframes radarRipple {
+  0% { transform: scale(0.85); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.radar-icon-pulse {
+  color: #fbbf24;
+  animation: spin 6s linear infinite;
+}
+
+.radar-headline {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+}
+
+.radar-subline {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  margin: 3px 0 0 0;
+  min-height: 18px;
+}
+
+.radar-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.simulate-accept-btn {
+  font-size: 0.74rem;
+  padding: 4px 10px;
+}
+
+/* En Route Stage */
+.counterpart-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.counterpart-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #000;
+  font-weight: 900;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.counterpart-name {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.counterpart-trade {
+  font-size: 0.78rem;
+  color: #93c5fd;
+}
+
+.counterpart-eta {
+  font-size: 0.74rem;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.quick-contact-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.quick-call-btn, .quick-wa-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+
+.quick-call-btn {
+  background: #10b981;
+  color: #000;
+}
+
+.quick-wa-btn {
+  background: #25d366;
+  color: #fff;
+}
+
+.quick-call-btn:hover, .quick-wa-btn:hover {
+  transform: scale(1.08);
+}
+
+/* OTP Verification Box */
+.otp-verification-box {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-top: 4px;
+}
+
+.customer-otp-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.otp-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.otp-code-digits {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.otp-digit-box {
+  width: 38px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fbbf24;
+  font-size: 1.4rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+}
+
+.otp-instruction {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 320px;
+}
+
+.worker-otp-input-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.otp-user-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  color: #fff;
+  text-align: center;
+  width: 120px;
+  outline: none;
+}
+
+.otp-user-input:focus {
+  border-color: #f59e0b;
+}
+
+.otp-user-input.error {
+  border-color: #ef4444;
+}
+
+.otp-error-text {
+  color: #f87171;
+  font-size: 0.72rem;
+  margin: 0;
+}
+
+/* In Progress Stage */
+.inprogress-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inprogress-work-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.inprogress-meta {
+  font-size: 0.8rem;
+  color: #93c5fd;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.safety-guarantee-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.74rem;
+  color: #34d399;
+  font-weight: 600;
+  width: fit-content;
+  margin-top: 4px;
+}
+
+.inprogress-footer {
+  margin-top: 6px;
+}
+
+.customer-waiting-prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+
+.spinner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  animation: availPulse 1.5s infinite;
+}
+
+/* Settlement Stage */
+.settlement-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settlement-amount-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.amount-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.amount-value {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #34d399;
+}
+
+.amount-sub {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+}
+
+.payment-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.upi-pay-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #000;
+  font-weight: 800;
+}
+
+.worker-payment-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  color: #fbbf24;
+}
+
+/* UPI QR Modal */
+.upi-qr-display-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.upi-qr-frame {
+  position: relative;
+  background: #fff;
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.qr-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 3px solid #f59e0b;
+}
+
+.qr-corner.top-left { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+.qr-corner.top-right { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+.qr-corner.bottom-left { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+.qr-corner.bottom-right { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+.upi-id-tag {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.review-prompt-body {
+  text-align: center;
+  padding: 8px 0;
+}
+
+
 
 

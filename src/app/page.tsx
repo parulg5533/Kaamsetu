@@ -16,6 +16,7 @@ import { WorkerHome } from '@/components/worker/WorkerHome';
 import { NearbyWorker } from '@/components/customer/WorkerCard';
 import { NearbyJob } from '@/components/worker/JobCard';
 import { WorkerApplication } from '@/components/worker/ApplicationsList';
+import { LiveCoordinationTracker, ActiveCoordinationJob } from '@/components/common/LiveCoordinationTracker';
 
 interface UserSession {
   id: string;
@@ -123,6 +124,9 @@ export default function KaamSetuApp() {
   const [ratingValue, setRatingValue] = useState(5);
   const [selectedTag, setSelectedTag] = useState('Punctual');
   const [ratingComment, setRatingComment] = useState('');
+
+  // Real-Time Matching & Live Coordination Lifecycle State
+  const [activeCoordination, setActiveCoordination] = useState<ActiveCoordinationJob | null>(null);
 
   // Login Form States
   const [loginRole, setLoginRole] = useState<'WORKER' | 'BUSINESS'>('WORKER');
@@ -313,6 +317,26 @@ export default function KaamSetuApp() {
       const appsData = await appsRes.json();
       if (appsData.success) {
         setWorkerApplications(appsData.applications || []);
+        // Surface any accepted job as active live coordination for the worker
+        const acceptedApp = appsData.applications?.find((a: any) => a.status === 'ACCEPTED');
+        if (acceptedApp) {
+          setActiveCoordination((curr) => {
+            if (curr && curr.jobId === acceptedApp.job.id) return curr;
+            return {
+              jobId: acceptedApp.job.id,
+              title: acceptedApp.job.title,
+              locality: acceptedApp.job.locality || userLocation.locality,
+              wage: acceptedApp.job.wage,
+              distanceKm: 1.4,
+              stage: 'ACCEPTED_EN_ROUTE',
+              counterpartId: acceptedApp.job.business?.id || 'cust-1',
+              counterpartName: acceptedApp.job.business?.name || 'Customer',
+              counterpartPhone: acceptedApp.job.business?.phone || '9812345678',
+              counterpartTrade: acceptedApp.job.title,
+              startOtp: '7821',
+            };
+          });
+        }
       }
     } catch (err) {
       console.error('Error loading worker data:', err);
@@ -383,8 +407,46 @@ export default function KaamSetuApp() {
       if (data.success) {
         setShowPostJobSheet(false);
         setPreSelectedWorker(null);
-        showNotification(lang === 'hi' ? 'जॉब पोस्ट हो गया! पास के कामगारों को भेज दिया गया है।' : 'Job posted! Nearby workers notified.');
+        showNotification(
+          lang === 'hi'
+            ? 'जॉब पोस्ट हो गया! पास के कामगारों को सिग्नल भेजा गया है।'
+            : 'Job broadcasted! Real-time matching active.'
+        );
         loadCustomerData();
+
+        // 1. Launch Live Coordination Radar in MATCHING stage
+        const newCoordination: ActiveCoordinationJob = {
+          jobId: data.job?.id || 'job-new',
+          title: formData.title || 'Work Request',
+          locality: formData.locality || userLocation.locality,
+          wage: formData.wage || 650,
+          distanceKm: 1.8,
+          stage: 'MATCHING',
+          counterpartId: preSelectedWorker ? preSelectedWorker.id : 'worker-ramesh',
+          counterpartName: preSelectedWorker ? preSelectedWorker.name : 'Ramesh Kumar',
+          counterpartPhone: '9876543210',
+          counterpartTrade: formData.title || 'Electrician',
+          startOtp: '7821',
+        };
+        setActiveCoordination(newCoordination);
+
+        // 2. Real-Time simulation timer: auto-accept worker in 6 seconds
+        setTimeout(() => {
+          setActiveCoordination((curr) => {
+            if (curr && curr.stage === 'MATCHING') {
+              showNotification(
+                lang === 'hi'
+                  ? 'कामगार मिल गया! रमेश कुमार आ रहे हैं।'
+                  : 'Worker Found! Ramesh Kumar accepted and is on the way.'
+              );
+              return {
+                ...curr,
+                stage: 'ACCEPTED_EN_ROUTE',
+              };
+            }
+            return curr;
+          });
+        }, 6000);
       } else {
         alert(data.error || 'Failed to post job');
       }
@@ -424,9 +486,95 @@ export default function KaamSetuApp() {
           handleViewApplicants(selectedJobForApplicants);
         }
         loadCustomerData();
+
+        // Launch Live Coordination Tracker in ACCEPTED_EN_ROUTE stage
+        setActiveCoordination({
+          jobId: selectedJobForApplicants?.id || 'job-active',
+          title: selectedJobForApplicants?.title || 'Work in Progress',
+          locality: selectedJobForApplicants?.locality || userLocation.locality,
+          wage: selectedJobForApplicants?.wage || 650,
+          distanceKm: 1.8,
+          stage: 'ACCEPTED_EN_ROUTE',
+          counterpartId: 'worker-accepted',
+          counterpartName: data.worker?.name || 'Ramesh Kumar',
+          counterpartPhone: data.worker?.phone || '9876543210',
+          startOtp: '7821',
+        });
       }
     } catch (err) {
       console.error('Error accepting worker:', err);
+    }
+  };
+
+  // Real-Time Matching & Live Coordination Lifecycle Handlers
+  const handleVerifyCoordinationOtp = (enteredOtp: string) => {
+    if (activeCoordination && enteredOtp.trim() === activeCoordination.startOtp) {
+      setActiveCoordination((prev) => (prev ? { ...prev, stage: 'IN_PROGRESS' } : null));
+      showNotification(
+        lang === 'hi'
+          ? 'सुरक्षा OTP सत्यापित! काम शुरू हुआ।'
+          : 'Security OTP Verified! Work in progress.'
+      );
+      return true;
+    }
+    return false;
+  };
+
+  const handleWorkerFinishWork = () => {
+    if (activeCoordination) {
+      handleConfirmCompletion(activeCoordination.jobId);
+      setActiveCoordination((prev) =>
+        prev ? { ...prev, stage: 'WORK_COMPLETED_PENDING_PAYMENT' } : null
+      );
+      showNotification(
+        lang === 'hi'
+          ? 'काम पूरा घोषित किया गया! ग्राहक से भुगतान पुष्टि की प्रतीक्षा है।'
+          : 'Work marked finished! Waiting for customer payment settlement.'
+      );
+    }
+  };
+
+  const handleCustomerConfirmPayment = (paymentMode: 'UPI' | 'CASH') => {
+    if (activeCoordination) {
+      handleConfirmCompletion(activeCoordination.jobId, activeCoordination.counterpartId);
+      setActiveCoordination((prev) =>
+        prev ? { ...prev, stage: 'SETTLED_REVIEW' } : null
+      );
+      showNotification(
+        lang === 'hi'
+          ? `भुगतान (${paymentMode}) सफल! कृपया रेटिंग दें।`
+          : `Payment (${paymentMode}) confirmed! Please build reputation with a review.`
+      );
+    }
+  };
+
+  const handleOpenCoordinationRating = () => {
+    if (activeCoordination) {
+      setRatingTarget({
+        jobId: activeCoordination.jobId,
+        toUserId: activeCoordination.counterpartId,
+        toName: activeCoordination.counterpartName,
+        role: currentUser?.role === 'BUSINESS' ? 'WORKER' : 'BUSINESS',
+      });
+      setShowRatingModal(true);
+    }
+  };
+
+  const handleSimulateAccept = () => {
+    if (activeCoordination) {
+      setActiveCoordination((prev) =>
+        prev
+          ? {
+              ...prev,
+              stage: 'ACCEPTED_EN_ROUTE',
+            }
+          : null
+      );
+      showNotification(
+        lang === 'hi'
+          ? 'कामगार मिल गया! रमेश कुमार आ रहे हैं।'
+          : 'Worker Found! Ramesh Kumar accepted and is on the way.'
+      );
     }
   };
 
@@ -516,7 +664,7 @@ export default function KaamSetuApp() {
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyLoginOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginOtp || loginOtp.trim().length < 4) {
       setLoginError(lang === 'hi' ? 'कृपया 4 अंकों का OTP दर्ज करें' : 'Please enter the 4-digit OTP');
@@ -695,6 +843,23 @@ export default function KaamSetuApp() {
         onOpenLogin={() => setShowLoginModal(true)}
         onLogout={handleLogout}
       />
+
+      {/* Real-Time Live Labour Coordination Tracker (Centerpiece UX) */}
+      {activeCoordination && (
+        <div style={{ maxWidth: '640px', width: '100%', margin: '14px auto 0 auto', padding: '0 16px' }}>
+          <LiveCoordinationTracker
+            lang={lang}
+            userRole={currentUser?.role === 'WORKER' ? 'WORKER' : 'CUSTOMER'}
+            activeJob={activeCoordination}
+            onVerifyOtp={handleVerifyCoordinationOtp}
+            onWorkerFinishWork={handleWorkerFinishWork}
+            onCustomerConfirmPayment={handleCustomerConfirmPayment}
+            onOpenRating={handleOpenCoordinationRating}
+            onSimulateAccept={handleSimulateAccept}
+            onCancel={() => setActiveCoordination(null)}
+          />
+        </div>
+      )}
 
       {/* 3. MAIN WORKSPACE BASED ON ROLE & ACTIVE TAB */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -1062,7 +1227,7 @@ export default function KaamSetuApp() {
         error={loginError}
         loading={loginLoading}
         onSendOtp={handleSendOtp}
-        onVerifyOtp={handleVerifyOtp}
+        onVerifyOtp={handleVerifyLoginOtp}
         demoPersonas={DEMO_PERSONAS}
         onSelectDemoPersona={(personaKey) => switchPersona(personaKey)}
         isDemoMode={isDemoMode}
