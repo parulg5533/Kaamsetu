@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Search, Plus, Briefcase, Users, Clock, MapPin, Sparkles, Filter, CheckCircle2, ChevronRight } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
 import { WorkerCard, NearbyWorker } from './WorkerCard';
+import { WorkerProfileSheet } from './WorkerProfileSheet';
 
 interface Skill {
   id: string;
@@ -139,6 +140,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string>('all');
+  const [selectedWorkerForProfile, setSelectedWorkerForProfile] = useState<NearbyWorker | null>(null);
 
   // Filter workers dynamically based on search query & selected category
   const filteredWorkers = workers.filter((w) => {
@@ -369,10 +371,23 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
               lang={lang}
               worker={worker}
               onRequestHire={onRequestHireWorker}
+              onViewProfile={(w) => setSelectedWorkerForProfile(w)}
             />
           ))
         )}
       </div>
+
+      {/* 7. VERIFIED WORKER TRUST PROFILE MODAL SHEET */}
+      <WorkerProfileSheet
+        lang={lang}
+        worker={selectedWorkerForProfile}
+        isOpen={Boolean(selectedWorkerForProfile)}
+        onClose={() => setSelectedWorkerForProfile(null)}
+        onHireWorker={(worker) => {
+          setSelectedWorkerForProfile(null);
+          onRequestHireWorker(worker);
+        }}
+      />
     </div>
   );
 };

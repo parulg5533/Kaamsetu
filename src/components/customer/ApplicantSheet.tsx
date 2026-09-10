@@ -145,6 +145,10 @@ export const ApplicantSheet: React.FC<ApplicantSheetProps> = ({
                       <CheckCircle2 size={12} />
                       {app.attendance_rate}% {t.attendance}
                     </div>
+                    <div className="trust-badge verified" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                      <ShieldCheck size={12} />
+                      {lang === 'hi' ? 'फोन सत्यापित ✓' : 'Phone verified ✓'}
+                    </div>
                   </div>
 
                   {/* Unlocked Contact Box when accepted */}

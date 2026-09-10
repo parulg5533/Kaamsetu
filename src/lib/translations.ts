@@ -74,6 +74,12 @@ export const translations = {
     // Trust & Reputation
     verifiedWorker: 'Verified Worker',
     verifiedPhone: 'Phone Verified ✓',
+    viewProfile: 'View Profile',
+    hireNow: 'Hire',
+    availableTodayBadge: '🟢 Available today',
+    availableTomorrowBadge: '🔵 Available tomorrow',
+    workerProfileTitle: 'Verified Worker Profile',
+    safetyGuarantee: '100% Phone Verified & Community Reviewed',
     jobsCompleted: 'jobs done',
     attendance: 'Attendance',
     experience: 'Experience',
@@ -172,7 +178,13 @@ export const translations = {
     
     // Trust & Reputation
     verifiedWorker: 'सत्यापित कामगार',
-    verifiedPhone: 'फोन नंबर सत्यापित ✓',
+    verifiedPhone: 'फोन सत्यापित ✓',
+    viewProfile: 'प्रोफाइल देखें',
+    hireNow: 'काम दें',
+    availableTodayBadge: '🟢 आज उपलब्ध',
+    availableTomorrowBadge: '🔵 कल उपलब्ध',
+    workerProfileTitle: 'सत्यापित कामगार प्रोफाइल',
+    safetyGuarantee: '100% फोन नंबर सत्यापित और स्थानीय समीक्षाएं',
     jobsCompleted: 'काम पूरे किए',
     attendance: 'उपस्थिति',
     experience: 'अनुभव',
