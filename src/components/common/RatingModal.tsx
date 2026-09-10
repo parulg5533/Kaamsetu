@@ -44,11 +44,11 @@ export const RatingModal: React.FC<RatingModalProps> = ({
     ? ['समय पर आए (Punctual)', 'मेहनती (Hardworking)', 'सभ्य व्यवहार (Polite)', 'तेज़ काम (Fast)']
     : ['Punctual', 'Hardworking', 'Polite', 'Quick Learner'];
 
-  const businessTags = lang === 'hi'
-    ? ['पूरा पैसा दिया (Paid On Time)', 'अच्छा माहौल (Good Environment)', 'भोजन दिया (Food Provided)', 'सभ्य व्यवहार (Respectful)']
-    : ['Paid On Time', 'Good Environment', 'Food Provided', 'Respectful'];
+  const customerTags = lang === 'hi'
+    ? ['समय पर भुगतान (Paid On Time)', 'अच्छा व्यवहार (Respectful & Kind)', 'साफ निर्देश दिए (Clear Instructions)', 'सुरक्षित माहौल (Safe Environment)']
+    : ['Paid On Time', 'Respectful & Kind', 'Clear Instructions', 'Safe Environment'];
 
-  const activeTags = target.role === 'WORKER' ? workerTags : businessTags;
+  const activeTags = target.role === 'WORKER' ? workerTags : customerTags;
 
   return (
     <div className="bottom-sheet-overlay" role="dialog" aria-modal="true">

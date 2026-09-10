@@ -30,15 +30,15 @@ const DEMO_PERSONAS = [
     name: 'Rahul Kumar (Worker)',
     role: 'WORKER' as const,
     phone: '9876543210',
-    title: 'Restaurant & Shop Helper',
+    title: 'Daily Helper & Assistant',
     locality: 'Ranjit Avenue, Amritsar',
   },
   {
     id: 'biz-sharma',
-    name: 'Sharma Restaurant (Business)',
+    name: 'Sharma Ji (Customer / काम देने वाला)',
     role: 'BUSINESS' as const,
     phone: '9812345678',
-    title: 'Restaurant & Dhaba',
+    title: 'Household & Home Repairs',
     locality: 'Lawrence Road, Amritsar',
   },
   {
@@ -46,15 +46,15 @@ const DEMO_PERSONAS = [
     name: 'Aman Singh (Worker)',
     role: 'WORKER' as const,
     phone: '9876543211',
-    title: 'Loading & Delivery Helper',
+    title: 'Loading & Heavy Work',
     locality: 'Mall Road, Amritsar',
   },
   {
     id: 'biz-punjab',
-    name: 'Punjab Logistics (Business)',
+    name: 'Anita Verma (Customer / काम देने वाला)',
     role: 'BUSINESS' as const,
     phone: '9812345680',
-    title: 'Transport & Godown',
+    title: 'Home Renovation & Cleaning',
     locality: 'GT Road, Amritsar',
   },
   {
@@ -273,7 +273,7 @@ export default function KaamSetuApp() {
       });
       const data = await res.json();
       if (data.success) {
-        showNotification(lang === 'hi' ? 'आवेदन सफलतापूर्वक भेजा गया! मालिक को सूचित कर दिया गया है।' : 'Applied! Employer notified.');
+        showNotification(lang === 'hi' ? 'आवेदन भेजा गया! काम देने वाले को सूचित कर दिया गया है।' : 'Applied! Customer notified.');
         loadWorkerData();
       } else {
         alert(data.error || 'Failed to apply');
@@ -449,7 +449,7 @@ export default function KaamSetuApp() {
           phone: loginPhone.trim(),
           otp: loginOtp.trim(),
           role: loginRole,
-          name: loginName.trim() || (loginRole === 'WORKER' ? 'Worker User' : 'Business Owner'),
+          name: loginName.trim() || (loginRole === 'WORKER' ? 'Worker User' : 'Customer'),
         }),
       });
       const data = await res.json();
@@ -506,7 +506,7 @@ export default function KaamSetuApp() {
           </div>
           {currentUser && (
             <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600 }}>
-              {currentUser.role === 'WORKER' ? '👷' : '🏪'} {currentUser.name}
+              {currentUser.role === 'WORKER' ? '👷' : '🏠'} {currentUser.name}
             </span>
           )}
         </div>
@@ -521,7 +521,7 @@ export default function KaamSetuApp() {
           >
             {DEMO_PERSONAS.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.role === 'WORKER' ? '👷' : '🏪'} {p.name.split(' (')[0]}
+                {p.role === 'WORKER' ? '👷' : '🏠'} {p.name.split(' (')[0]}
               </option>
             ))}
           </select>

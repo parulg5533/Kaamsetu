@@ -105,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
               currentUser.role === 'BUSINESS' ? 'business' : ''
             }`}
           >
-            {currentUser.role === 'WORKER' ? '👷' : '🏪'}
+            {currentUser.role === 'WORKER' ? '👷' : '🏠'}
             <span>{currentUser.role === 'WORKER' ? t.worker : t.customer}</span>
           </div>
         )}

@@ -127,7 +127,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 onClick={() => onSelectRole('BUSINESS')}
               >
                 {loginRole === 'BUSINESS' && <div className="role-selected-badge business">✓</div>}
-                <div className="role-card-icon">🏪</div>
+                <div className="role-card-icon">🏠</div>
                 <div className="role-card-title">{t.customer}</div>
                 <div className="role-card-desc">{t.customerDesc}</div>
               </div>
@@ -141,7 +141,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <label className="form-label">
                   {loginRole === 'WORKER'
                     ? (lang === 'hi' ? 'कारीगर का मोबाइल नंबर' : 'Worker Mobile Number')
-                    : (lang === 'hi' ? 'दुकानदार / ग्राहक का मोबाइल नंबर' : 'Customer / Business Mobile Number')}
+                    : (lang === 'hi' ? 'काम देने वाले / ग्राहक का मोबाइल नंबर' : 'Customer Mobile Number')}
                 </label>
                 <div className="phone-input-wrapper">
                   <div className="phone-prefix">🇮🇳 +91</div>
@@ -162,12 +162,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <label className="form-label">
                   {loginRole === 'WORKER'
                     ? (lang === 'hi' ? 'आपका नाम (जैसे राहुल कुमार)' : 'Your Name (e.g. Rahul Kumar)')
-                    : (lang === 'hi' ? 'दुकान / ग्राहक का नाम (जैसे शर्मा रेस्टोरेंट)' : 'Business / Name (e.g. Sharma Restaurant)')}
+                    : (lang === 'hi' ? 'आपका नाम (जैसे अनिता शर्मा / शर्मा जी)' : 'Your Name (e.g. Anita Sharma)')}
                 </label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder={loginRole === 'WORKER' ? 'e.g. Rahul Kumar' : 'e.g. Sharma Restaurant'}
+                  placeholder={loginRole === 'WORKER' ? 'e.g. Rahul Kumar' : 'e.g. Anita Sharma'}
                   value={name}
                   onChange={(e) => onChangeName(e.target.value)}
                 />
@@ -273,10 +273,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 className="demo-account-btn"
                 onClick={() => onSelectDemoPersona(p.id)}
               >
-                <span className="demo-role-emoji">{p.role === 'WORKER' ? '👷' : '🏪'}</span>
+                <span className="demo-role-emoji">{p.role === 'WORKER' ? '👷' : '🏠'}</span>
                 <div style={{ overflow: 'hidden' }}>
                   <div className="demo-name">{p.name.split(' (')[0]}</div>
-                  <div className="demo-detail">{p.role === 'WORKER' ? 'Worker' : 'Business'} · {p.locality.split(',')[0]}</div>
+                  <div className="demo-detail">{p.role === 'WORKER' ? (lang === 'hi' ? 'काम करने वाला' : 'Worker') : (lang === 'hi' ? 'काम देने वाला' : 'Customer')} · {p.locality.split(',')[0]}</div>
                 </div>
               </button>
             ))}

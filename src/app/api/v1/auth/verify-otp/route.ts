@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       user = await prisma.user.create({
         data: {
           phone,
-          name: name || (role === 'WORKER' ? 'New Worker' : 'New Business'),
+          name: name || (role === 'WORKER' ? 'New Worker' : 'Customer'),
           role,
         },
         include: {
@@ -72,9 +72,9 @@ export async function POST(request: Request) {
         await prisma.business.create({
           data: {
             userId: user.id,
-            businessName: name || 'My Local Business',
-            businessType: 'General Store',
-            address: 'Main Market',
+            businessName: name || 'Customer',
+            businessType: 'Household / Service Request',
+            address: 'Amritsar',
             city: 'Amritsar',
             locality: 'City Center',
             latitude: 31.6340,

@@ -95,7 +95,7 @@ export const ApplicationsList: React.FC<ApplicationsListProps> = ({
                   {t.employerContactUnlocked}
                 </div>
                 <div style={{ fontSize: '0.84rem', color: '#f8fafc' }}>
-                  {lang === 'hi' ? 'मालिक / प्रबंधक:' : 'Owner / Manager:'}{' '}
+                  {lang === 'hi' ? 'काम देने वाला (Customer):' : 'Customer Name:'}{' '}
                   <strong>{app.job.business.owner_name}</strong>
                 </div>
 
