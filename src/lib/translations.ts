@@ -35,6 +35,13 @@ export const translations = {
     noJobsPosted: 'You have not posted any work requests yet.',
     
     // Worker Home
+    aajKaamChahiye: 'Need work today?',
+    availableForWork: '🟢 Available for work',
+    offToday: '🔴 Off / Not working today',
+    availableSub: 'Nearby customers can discover and hire you',
+    offSub: 'You will not receive work notifications',
+    jobsNearYouCount: 'jobs near you (< 5 km)',
+    confirmedWorkHeading: '🎉 Confirmed Work — Contact Customer',
     canIGetWork: 'Your Daily Availability',
     availableToday: '🟢 Available Today',
     availableTomorrow: '🔵 Available Tomorrow',
@@ -127,6 +134,13 @@ export const translations = {
     noJobsPosted: 'आपने अभी तक कोई काम पोस्ट नहीं किया है।',
     
     // Worker Home
+    aajKaamChahiye: 'आज काम चाहिए?',
+    availableForWork: '🟢 काम के लिए उपलब्ध',
+    offToday: '🔴 आज छुट्टी / काम नहीं',
+    availableSub: 'पास के ग्राहक आपको काम के लिए कॉल कर सकते हैं',
+    offSub: 'आज काम की सूचनाएं बंद हैं',
+    jobsNearYouCount: 'काम आपके पास (< 5 किमी)',
+    confirmedWorkHeading: '🎉 काम पक्का हुआ — ग्राहक से संपर्क करें',
     canIGetWork: 'आपकी आज की उपलब्धता',
     availableToday: '🟢 आज काम चाहिए',
     availableTomorrow: '🔵 कल काम चाहिए',

@@ -191,61 +191,113 @@ body {
   color: #60a5fa;
 }
 
-/* Big Availability Pill (Worker) */
-.worker-avail-box {
-  padding: 14px 20px;
+/* Simplified Worker Availability Box */
+.worker-today-card {
+  margin: 16px 20px 8px 20px;
   background: var(--bg-card);
-  border-bottom: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
-.avail-title {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  font-weight: 700;
-  margin-bottom: 8px;
+.worker-today-card.available {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
 }
 
+.worker-today-card.off {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(185, 28, 28, 0.04) 100%);
+}
+
+.worker-today-title {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.worker-today-sub {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.avail-toggle-btn {
+  padding: 8px 14px;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.avail-toggle-btn.on {
+  background: #10b981;
+  color: #000;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.4);
+}
+
+.avail-toggle-btn.off {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+/* Confirmed Job Celebration Banner (Immediate loop closure) */
+.confirmed-job-banner {
+  margin: 6px 20px 10px 20px;
+  background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
+  border: 1.5px solid #10b981;
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
+}
+
+.confirmed-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.confirmed-banner-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirmed-banner-body {
+  font-size: 0.82rem;
+  color: #e2e8f0;
+}
+
+.confirmed-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Sub-navigation tabs (simplified) */
 .avail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
-}
-
-.avail-btn {
-  padding: 10px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  transition: all 0.2s;
-  text-align: center;
-}
-
-.avail-btn.active-today {
-  background: var(--success-light);
-  border-color: var(--success);
-  color: #34d399;
-}
-
-.avail-btn.active-tomorrow {
-  background: var(--info-light);
-  border-color: var(--info);
-  color: #60a5fa;
-}
-
-.avail-btn.active-off {
-  background: var(--danger-light);
-  border-color: var(--danger);
-  color: #f87171;
 }
 
 /* Customer Search Bar & Hero */

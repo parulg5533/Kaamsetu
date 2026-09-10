@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { MapPin, Clock, Utensils, CheckCircle2 } from 'lucide-react';
+import { MapPin, Clock, Utensils, CheckCircle2, Zap } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
 
 export interface NearbyJob {
@@ -48,55 +48,82 @@ export const JobCard: React.FC<JobCardProps> = ({
   const isApplied = job.my_application_status === 'APPLIED';
   const isAccepted = job.my_application_status === 'ACCEPTED' || job.my_application_status === 'COMPLETED';
 
+  // Compute clean duration
+  const getDurationHours = (start: string, end: string) => {
+    try {
+      const [startH] = start.split(':').map(Number);
+      const [endH] = end.split(':').map(Number);
+      if (!isNaN(startH) && !isNaN(endH)) {
+        const diff = endH - startH;
+        if (diff > 0) return `${diff} ${lang === 'hi' ? 'घंटे' : 'hours'}`;
+      }
+    } catch (e) {}
+    return `${start} - ${end}`;
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = job.job_date === todayStr;
+  const timingBadge = `${isToday ? (lang === 'hi' ? 'आज' : 'Today') : (lang === 'hi' ? 'कल' : 'Tomorrow')} • ${getDurationHours(job.start_time, job.end_time)}`;
+
   return (
     <div className="job-card">
       <div className="job-header">
         <div>
-          <div className="job-title">{job.title}</div>
-          <div className="business-sub">
+          <div className="job-title" style={{ fontSize: '1.08rem', fontWeight: 800 }}>
+            {job.title}
+          </div>
+          <div className="business-sub" style={{ marginTop: '3px' }}>
             <span>{job.business.business_name}</span>
             <span>·</span>
             <span>⭐ {job.business.rating}</span>
             <span>({job.business.jobs_completed} {t.jobsCompleted})</span>
           </div>
         </div>
-        <div className="wage-badge">
+        <div className="wage-badge" style={{ fontSize: '1.05rem', padding: '6px 12px' }}>
           ₹{job.wage}/{lang === 'hi' ? 'दिन' : 'day'}
         </div>
       </div>
 
-      <div className="job-meta-grid">
-        <div className="meta-chip distance">
+      <div className="job-meta-grid" style={{ margin: '4px 0' }}>
+        <div className="meta-chip distance" style={{ fontWeight: 700 }}>
           <MapPin size={13} />
-          {job.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'} ({job.locality})
+          📍 {job.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'} ({job.locality})
         </div>
 
-        <div className="meta-chip">
+        <div className="meta-chip" style={{ fontWeight: 600 }}>
           <Clock size={13} />
-          {job.job_date} · {job.start_time} - {job.end_time}
+          {timingBadge}
         </div>
 
         {job.food_provided && (
-          <div className="meta-chip food">
+          <div className="meta-chip food" style={{ fontWeight: 600 }}>
             <Utensils size={13} />
-            {t.foodProvided}
+            🍲 {t.foodProvided}
           </div>
         )}
       </div>
 
       {job.description && (
-        <div className="job-description">{job.description}</div>
+        <div className="job-description" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+          {job.description}
+        </div>
       )}
 
-      <div className="job-actions">
+      <div className="job-actions" style={{ marginTop: '6px' }}>
         {isApplied ? (
-          <div className="btn-applied">
-            <CheckCircle2 size={16} />
+          <div
+            className="btn-applied"
+            style={{ width: '100%', minHeight: '46px', fontSize: '0.88rem', fontWeight: 700 }}
+          >
+            <CheckCircle2 size={18} />
             <span>{t.appliedWaiting}</span>
           </div>
         ) : isAccepted ? (
-          <div className="btn-confirmed">
-            <CheckCircle2 size={16} />
+          <div
+            className="btn-confirmed"
+            style={{ width: '100%', minHeight: '46px', fontSize: '0.88rem', fontWeight: 700 }}
+          >
+            <CheckCircle2 size={18} />
             <span>{t.jobConfirmed}</span>
           </div>
         ) : (
@@ -105,7 +132,17 @@ export const JobCard: React.FC<JobCardProps> = ({
             className="btn-apply"
             onClick={() => onApply(job.id)}
             disabled={loading}
+            style={{
+              width: '100%',
+              minHeight: '46px',
+              fontSize: '0.92rem',
+              fontWeight: 800,
+              background: 'var(--primary)',
+              color: '#000',
+              boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+            }}
           >
+            <Zap size={16} />
             {t.applyNow}
           </button>
         )}
