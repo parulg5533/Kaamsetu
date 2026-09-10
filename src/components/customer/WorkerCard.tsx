@@ -1,8 +1,23 @@
 'use client';
 
 import React from 'react';
-import { Star, MapPin, CheckCircle2, ShieldCheck, Eye, Zap } from 'lucide-react';
+import {
+  Star,
+  MapPin,
+  CheckCircle2,
+  ShieldCheck,
+  Eye,
+  Zap,
+  Wrench,
+  Sparkles,
+  Paintbrush,
+  Truck,
+  Hammer,
+  Utensils,
+  Briefcase,
+} from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
+import { Card, Avatar, Badge, StatusBadge, Button } from '@/components/ui';
 
 export interface NearbyWorker {
   id: string;
@@ -27,30 +42,30 @@ interface WorkerCardProps {
   onViewProfile?: (worker: NearbyWorker) => void;
 }
 
-// Map trade skill to prominent icon and bilingual label
+// Map trade skill to professional Lucide icon and bilingual label
 export const getWorkerTradeDetails = (
   skills: Array<{ id: string; name: string; category: string }>,
   lang: Language
 ) => {
   if (!skills || skills.length === 0) {
     return {
-      icon: '🛠️',
+      icon: <Briefcase size={16} />,
       name: lang === 'hi' ? 'जनरल हेल्पर' : 'General Helper',
     };
   }
 
   const firstSkill = (skills[0]?.name || '').toLowerCase();
   if (firstSkill.includes('elec') || firstSkill.includes('बिजली')) {
-    return { icon: '⚡', name: lang === 'hi' ? 'बिजली मिस्त्री' : 'Electrician' };
+    return { icon: <Zap size={16} />, name: lang === 'hi' ? 'बिजली मिस्त्री' : 'Electrician' };
   }
   if (firstSkill.includes('plumb') || firstSkill.includes('नल')) {
-    return { icon: '🔧', name: lang === 'hi' ? 'नल मिस्त्री' : 'Plumber' };
+    return { icon: <Wrench size={16} />, name: lang === 'hi' ? 'नल मिस्त्री' : 'Plumber' };
   }
   if (firstSkill.includes('clean') || firstSkill.includes('सफाई')) {
-    return { icon: '🧹', name: lang === 'hi' ? 'सफाई कर्मचारी' : 'Cleaning Specialist' };
+    return { icon: <Sparkles size={16} />, name: lang === 'hi' ? 'सफाई कर्मचारी' : 'Cleaning Specialist' };
   }
   if (firstSkill.includes('paint') || firstSkill.includes('पुताई') || firstSkill.includes('पेंट')) {
-    return { icon: '🎨', name: lang === 'hi' ? 'पेंटर व पुताई' : 'Painter' };
+    return { icon: <Paintbrush size={16} />, name: lang === 'hi' ? 'पेंटर व पुताई' : 'Painter' };
   }
   if (
     firstSkill.includes('load') ||
@@ -58,10 +73,10 @@ export const getWorkerTradeDetails = (
     firstSkill.includes('पल्लेदार') ||
     firstSkill.includes('शिफ्ट')
   ) {
-    return { icon: '🚚', name: lang === 'hi' ? 'लोडिंग व सामान शिफ्ट' : 'Loading Helper' };
+    return { icon: <Truck size={16} />, name: lang === 'hi' ? 'लोडिंग व सामान शिफ्ट' : 'Loading Helper' };
   }
   if (firstSkill.includes('carpent') || firstSkill.includes('बढ़ई') || firstSkill.includes('लकड़ी')) {
-    return { icon: '🔨', name: lang === 'hi' ? 'बढ़ई / कारपेंटर' : 'Carpenter' };
+    return { icon: <Hammer size={16} />, name: lang === 'hi' ? 'बढ़ई / कारपेंटर' : 'Carpenter' };
   }
   if (
     firstSkill.includes('cook') ||
@@ -69,11 +84,11 @@ export const getWorkerTradeDetails = (
     firstSkill.includes('खाना') ||
     firstSkill.includes('restaurant')
   ) {
-    return { icon: '🍽️', name: lang === 'hi' ? 'रसोइया / कुक' : 'Cook / Kitchen' };
+    return { icon: <Utensils size={16} />, name: lang === 'hi' ? 'रसोइया / कुक' : 'Cook / Kitchen' };
   }
 
   return {
-    icon: '⚡',
+    icon: <Briefcase size={16} />,
     name: skills.map((s) => s.name).join(' · '),
   };
 };
@@ -87,31 +102,34 @@ export const WorkerCard: React.FC<WorkerCardProps> = ({
   const t = translations[lang];
   const trade = getWorkerTradeDetails(worker.skills, lang);
 
-  const isAvailToday = worker.availability === 'AVAILABLE_TODAY';
-  const isAvailTomorrow = worker.availability === 'AVAILABLE_TOMORROW';
+  const statusType =
+    worker.availability === 'AVAILABLE_TODAY'
+      ? 'available_today'
+      : worker.availability === 'AVAILABLE_TOMORROW'
+      ? 'available_tomorrow'
+      : 'offline';
+
+  const statusLabel =
+    worker.availability === 'AVAILABLE_TODAY'
+      ? t.availableTodayBadge
+      : worker.availability === 'AVAILABLE_TOMORROW'
+      ? t.availableTomorrowBadge
+      : lang === 'hi'
+      ? 'उपलब्धता पूछें'
+      : 'Contact for dates';
 
   return (
-    <div className="trust-elevated-card" role="article" aria-label={`Worker ${worker.name}`}>
-      {/* 1. TOP HEADER: Avatar + Name + Trade + Daily Wage */}
+    <Card interactive elevation="glow" className="worker-card" role="article" aria-label={`Worker ${worker.name}`}>
+      {/* 1. Header: Avatar + Identity + Trade + Daily Wage */}
       <div className="worker-card-header">
         <div className="worker-name-group">
-          <div className="worker-avatar-wrapper">
-            <div className="worker-avatar">
-              {worker.name.charAt(0)}
-            </div>
-            <div className="avatar-verified-badge" title={t.verifiedPhone}>
-              ✓
-            </div>
-          </div>
+          <Avatar name={worker.name} size="md" isVerified={true} />
           <div>
             <div className="worker-name">
               <span>{worker.name}</span>
-              <span className="verified-shield-tag" title={t.verifiedPhone}>
-                <ShieldCheck size={13} className="verified-icon" />
-                <span className="verified-shield-text">
-                  {lang === 'hi' ? 'सत्यापित' : 'Verified'}
-                </span>
-              </span>
+              <Badge variant="verified" icon={<ShieldCheck size={13} />}>
+                {lang === 'hi' ? 'सत्यापित' : 'Verified'}
+              </Badge>
             </div>
             <div className="worker-prominent-trade">
               <span className="trade-icon">{trade.icon}</span>
@@ -125,77 +143,59 @@ export const WorkerCard: React.FC<WorkerCardProps> = ({
         </div>
       </div>
 
-      {/* 2. TRUST & CREDENTIALS MATRIX (Visually Unavoidable Trust) */}
+      {/* 2. Trust & Credentials Matrix */}
       <div className="worker-trust-matrix">
         {/* Rating + Jobs Completed */}
-        <div className="trust-pill rating-pill">
-          <Star size={13} color="#f59e0b" fill="#f59e0b" />
-          <span className="bold-metric">{worker.rating}</span>
-          <span className="sub-metric">
-            · {worker.jobs_completed} {t.jobsCompleted}
-          </span>
-        </div>
+        <Badge variant="warning" icon={<Star size={13} color="#f59e0b" fill="#f59e0b" />}>
+          <strong style={{ color: '#fbbf24' }}>{worker.rating}</strong>
+          <span style={{ color: '#cbd5e1' }}> · {worker.jobs_completed} {t.jobsCompleted}</span>
+        </Badge>
 
-        {/* Availability Status */}
-        {isAvailToday ? (
-          <div className="trust-pill avail-today-pill">
-            <span className="avail-dot pulse" />
-            <span>{lang === 'hi' ? 'आज उपलब्ध' : 'Available today'}</span>
-          </div>
-        ) : isAvailTomorrow ? (
-          <div className="trust-pill avail-tomorrow-pill">
-            <span className="avail-dot blue" />
-            <span>{lang === 'hi' ? 'कल उपलब्ध' : 'Available tomorrow'}</span>
-          </div>
-        ) : (
-          <div className="trust-pill avail-neutral-pill">
-            <span>{lang === 'hi' ? 'उपलब्धता पूछें' : 'Contact for dates'}</span>
-          </div>
-        )}
+        {/* Semantic Status Badge */}
+        <StatusBadge status={statusType} label={statusLabel} />
 
         {/* Distance & Locality */}
-        <div className="trust-pill distance-pill">
-          <MapPin size={12} />
+        <Badge variant="default" icon={<MapPin size={12} color="#94a3b8" />}>
           <span>{worker.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'}</span>
-          <span className="locality-sep">·</span>
-          <span className="locality-name">{worker.locality}</span>
-        </div>
+          <span style={{ opacity: 0.5 }}> · </span>
+          <span style={{ color: '#94a3b8' }}>{worker.locality}</span>
+        </Badge>
 
-        {/* Phone & Identity Verified */}
-        <div className="trust-pill phone-verified-pill">
-          <ShieldCheck size={13} />
-          <span>{lang === 'hi' ? 'फोन सत्यापित ✓' : 'Phone verified ✓'}</span>
-        </div>
+        {/* Phone Verified Pill */}
+        <Badge variant="success" icon={<ShieldCheck size={13} />}>
+          {t.verifiedPhone}
+        </Badge>
 
         {/* Attendance Rate */}
         {worker.attendance_rate > 0 && (
-          <div className="trust-pill attendance-pill">
-            <CheckCircle2 size={12} />
-            <span>{worker.attendance_rate}% {t.attendance}</span>
-          </div>
+          <Badge variant="neutral" icon={<CheckCircle2 size={12} />}>
+            {worker.attendance_rate}% {t.attendance}
+          </Badge>
         )}
       </div>
 
-      {/* 3. DUAL ACTION BUTTONS: [View Profile] and [Hire] */}
+      {/* 3. Dual Action Buttons */}
       <div className="worker-card-actions">
-        <button
+        <Button
           type="button"
-          className="btn-view-profile"
+          variant="secondary"
+          size="md"
+          leftIcon={<Eye size={15} />}
           onClick={() => (onViewProfile ? onViewProfile(worker) : onRequestHire(worker))}
         >
-          <Eye size={15} />
-          <span>{t.viewProfile}</span>
-        </button>
+          {t.viewProfile}
+        </Button>
 
-        <button
+        <Button
           type="button"
-          className="btn-hire-primary"
+          variant="primary"
+          size="md"
+          leftIcon={<Zap size={15} />}
           onClick={() => onRequestHire(worker)}
         >
-          <Zap size={15} />
-          <span>{t.hireNow}</span>
-        </button>
+          {t.hireNow}
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 };

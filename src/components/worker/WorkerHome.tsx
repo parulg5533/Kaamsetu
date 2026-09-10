@@ -1,8 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Briefcase, CheckCircle2, Clock, MapPin, Sparkles, Phone, MessageSquare, ShieldCheck, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Briefcase,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  Phone,
+  MessageSquare,
+  ShieldCheck,
+  Star,
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  Check,
+  X,
+} from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
+import { Button, Badge, StatusBadge, EmptyState } from '@/components/ui';
 import { JobCard, NearbyJob } from './JobCard';
 import { WorkerApplication } from './ApplicationsList';
 
@@ -61,7 +76,7 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
   const pendingApps = applications.filter((a) => a.status === 'APPLIED');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div className="worker-home-container">
       {/* 1. EMOTIONALLY OBVIOUS AVAILABILITY TOGGLE */}
       <div className={`worker-today-card ${isAvailable ? 'available' : 'off'}`}>
         <div>
@@ -81,13 +96,17 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
         >
           {isAvailable ? (
             <>
-              <span>🟢</span>
-              <span>{lang === 'hi' ? 'उपलब्ध हूँ ✓' : 'Available ✓'}</span>
+              <span className="avail-toggle-indicator on">
+                <Check size={13} strokeWidth={3} />
+              </span>
+              <span>{lang === 'hi' ? 'उपलब्ध हूँ' : 'Available'}</span>
             </>
           ) : (
             <>
-              <span>🔴</span>
-              <span>{lang === 'hi' ? 'आज छुट्टी' : 'Off Today'}</span>
+              <span className="avail-toggle-indicator off">
+                <X size={13} strokeWidth={3} />
+              </span>
+              <span>{lang === 'hi' ? 'छुट्टी पर' : 'Off Today'}</span>
             </>
           )}
         </button>
@@ -101,33 +120,38 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
               <CheckCircle2 size={18} />
               <span>{t.confirmedWorkHeading}</span>
             </div>
-            <span
-              style={{
-                fontSize: '0.74rem',
-                fontWeight: 800,
-                background: '#10b981',
-                color: '#000',
-                padding: '3px 8px',
-                borderRadius: '6px',
-              }}
-            >
-              {app.status === 'COMPLETED' ? (lang === 'hi' ? 'काम पूरा ✓' : 'Completed ✓') : (lang === 'hi' ? 'पक्का हुआ' : 'Confirmed')}
-            </span>
+            <Badge variant="verified">
+              {app.status === 'COMPLETED'
+                ? lang === 'hi'
+                  ? 'काम पूरा ✓'
+                  : 'Completed ✓'
+                : lang === 'hi'
+                ? 'पक्का हुआ'
+                : 'Confirmed'}
+            </Badge>
           </div>
 
           <div className="confirmed-banner-body">
-            <div style={{ fontSize: '1.02rem', fontWeight: 800, color: '#fff' }}>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
               {app.job.title}
             </div>
-            <div style={{ fontSize: '0.84rem', color: '#93c5fd', marginTop: '2px' }}>
+            <div style={{ fontSize: '0.86rem', color: '#93c5fd', marginTop: '2px' }}>
               {lang === 'hi' ? 'काम देने वाला:' : 'Customer:'}{' '}
               <strong style={{ color: '#fff' }}>
                 {app.job.business.owner_name || app.job.business.business_name}
               </strong>{' '}
               · ₹{app.job.wage}/{lang === 'hi' ? 'दिन' : 'day'}
             </div>
-            <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginTop: '2px' }}>
-              📍 {app.job.locality} · 🕒 {app.job.start_time} - {app.job.end_time}
+            <div style={{ fontSize: '0.78rem', color: '#cbd5e1', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>
+                <MapPin size={12} style={{ display: 'inline', marginRight: '3px' }} />
+                {app.job.locality}
+              </span>
+              <span>·</span>
+              <span>
+                <Clock size={12} style={{ display: 'inline', marginRight: '3px' }} />
+                {app.job.start_time} - {app.job.end_time}
+              </span>
             </div>
           </div>
 
@@ -147,6 +171,7 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
                   rel="noreferrer"
                   className="btn-whatsapp"
                   style={{ minHeight: '40px', padding: '0 14px' }}
+                  aria-label="WhatsApp customer"
                 >
                   <MessageSquare size={16} />
                 </a>
@@ -154,34 +179,20 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
             )}
 
             {!app.worker_confirmed_completed && (
-              <button
-                type="button"
-                className="btn-apply"
-                style={{
-                  background: '#10b981',
-                  color: '#000',
-                  fontSize: '0.8rem',
-                  fontWeight: 800,
-                  minHeight: '40px',
-                  flex: 1,
-                }}
+              <Button
+                variant="success"
+                size="sm"
+                leftIcon={<CheckCircle2 size={15} />}
                 onClick={() => onConfirmCompleted(app.job.id)}
               >
-                <CheckCircle2 size={15} />
                 {t.markCompleted}
-              </button>
+              </Button>
             )}
 
-            <button
-              type="button"
-              className="btn-apply"
-              style={{
-                background: '#3b82f6',
-                color: '#fff',
-                fontSize: '0.8rem',
-                minHeight: '40px',
-                flex: 1,
-              }}
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Star size={14} color="#fbbf24" />}
               onClick={() =>
                 onRateBusiness(
                   app.job.business.id,
@@ -190,13 +201,13 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
                 )
               }
             >
-              ⭐ {t.rateUser}
-            </button>
+              {t.rateUser}
+            </Button>
           </div>
         </div>
       ))}
 
-      {/* 3. PENDING APPLICATIONS DRAWER TRIGGER (Non-intrusive) */}
+      {/* 3. PENDING APPLICATIONS DRAWER TRIGGER */}
       {pendingApps.length > 0 && (
         <div style={{ padding: '0 20px' }}>
           <button
@@ -217,8 +228,14 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
               cursor: 'pointer',
             }}
           >
-            <span>
-              📋 {pendingApps.length} {lang === 'hi' ? 'आवेदन भेजे गए हैं (स्वीकृति का इंतज़ार)' : 'Applied jobs (Waiting for confirmation)'}
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ClipboardList size={15} />
+              <span>
+                {pendingApps.length}{' '}
+                {lang === 'hi'
+                  ? 'आवेदन भेजे गए हैं (स्वीकृति का इंतज़ार)'
+                  : 'Applied jobs (Waiting for confirmation)'}
+              </span>
             </span>
             {showAppliedDrawer ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
@@ -246,18 +263,7 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
                       {app.job.locality} · ₹{app.job.wage}/{lang === 'hi' ? 'दिन' : 'day'}
                     </div>
                   </div>
-                  <span
-                    style={{
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      color: '#fbbf24',
-                      background: 'rgba(245, 158, 11, 0.12)',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                    }}
-                  >
-                    {t.appliedWaiting}
-                  </span>
+                  <StatusBadge status="applied" label={t.appliedWaiting} />
                 </div>
               ))}
             </div>
@@ -265,45 +271,52 @@ export const WorkerHome: React.FC<WorkerHomeProps> = ({
         </div>
       )}
 
-      {/* 4. IMMEDIATELY: JOBS NEAR YOU FEED */}
-      <div className="section-header" style={{ paddingBottom: '4px' }}>
-        <div>
-          <div className="section-title">
-            <Briefcase size={18} color="#f59e0b" />
-            <span>
-              {nearbyJobs.length} {t.jobsNearYouCount}
-            </span>
-          </div>
-          <div className="section-sub">
-            {lang === 'hi' ? 'सत्यापित काम सीधे ग्राहकों से' : 'Direct verified work from local customers'}
+      {/* 4. JOBS NEAR YOU FEED */}
+      <section aria-label="Nearby work">
+        <div className="section-header" style={{ paddingBottom: '4px' }}>
+          <div>
+            <div className="section-title">
+              <Briefcase size={18} color="#f59e0b" />
+              <span>
+                {nearbyJobs.length} {t.jobsNearYouCount}
+              </span>
+            </div>
+            <div className="section-sub">
+              {lang === 'hi' ? 'सत्यापित काम सीधे ग्राहकों से' : 'Direct verified work from local customers'}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* 5. JOB CARDS FEED */}
-      <div className="feed-content" style={{ paddingTop: 0 }}>
-        {loading ? (
-          <>
-            <div className="skeleton-card" />
-            <div className="skeleton-card" />
-          </>
-        ) : nearbyJobs.length === 0 ? (
-          <div className="empty-state">
-            <Briefcase size={36} />
-            <p style={{ fontWeight: 700 }}>{t.noJobsNear}</p>
-          </div>
-        ) : (
-          nearbyJobs.map((job) => (
-            <JobCard
-              key={job.id}
-              lang={lang}
-              job={job}
-              onApply={onApplyJob}
-              loading={loading}
+        {/* 5. JOB CARDS FEED */}
+        <div className="feed-content" style={{ paddingTop: 0 }}>
+          {loading ? (
+            <>
+              <div className="skeleton-card" />
+              <div className="skeleton-card" />
+            </>
+          ) : nearbyJobs.length === 0 ? (
+            <EmptyState
+              icon={<Briefcase size={26} />}
+              title={t.noJobsNear}
+              description={
+                lang === 'hi'
+                  ? 'अपनी उपलब्धता चालू रखें ताकि नए काम पोस्ट होते ही आपको सूचना मिले।'
+                  : 'Keep your availability ON to receive notifications as soon as jobs are posted.'
+              }
             />
-          ))
-        )}
-      </div>
+          ) : (
+            nearbyJobs.map((job) => (
+              <JobCard
+                key={job.id}
+                lang={lang}
+                job={job}
+                onApply={onApplyJob}
+                loading={loading}
+              />
+            ))
+          )}
+        </div>
+      </section>
     </div>
   );
 };

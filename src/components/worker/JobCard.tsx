@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { MapPin, Clock, Utensils, CheckCircle2, Zap } from 'lucide-react';
+import { MapPin, Clock, Utensils, CheckCircle2, Zap, Star } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
+import { Card, Badge, StatusBadge, Button } from '@/components/ui';
 
 export interface NearbyJob {
   id: string;
@@ -46,7 +47,8 @@ export const JobCard: React.FC<JobCardProps> = ({
 }) => {
   const t = translations[lang];
   const isApplied = job.my_application_status === 'APPLIED';
-  const isAccepted = job.my_application_status === 'ACCEPTED' || job.my_application_status === 'COMPLETED';
+  const isAccepted =
+    job.my_application_status === 'ACCEPTED' || job.my_application_status === 'COMPLETED';
 
   // Compute clean duration
   const getDurationHours = (start: string, end: string) => {
@@ -66,87 +68,78 @@ export const JobCard: React.FC<JobCardProps> = ({
   const timingBadge = `${isToday ? (lang === 'hi' ? 'आज' : 'Today') : (lang === 'hi' ? 'कल' : 'Tomorrow')} • ${getDurationHours(job.start_time, job.end_time)}`;
 
   return (
-    <div className="job-card">
+    <Card interactive elevation="glow" className="job-card" role="article" aria-label={`Job ${job.title}`}>
+      {/* 1. Header: Title, Customer info, Daily Wage */}
       <div className="job-header">
         <div>
-          <div className="job-title" style={{ fontSize: '1.08rem', fontWeight: 800 }}>
-            {job.title}
-          </div>
-          <div className="business-sub" style={{ marginTop: '3px' }}>
-            <span>{job.business.business_name}</span>
-            <span>·</span>
-            <span>⭐ {job.business.rating}</span>
-            <span>({job.business.jobs_completed} {t.jobsCompleted})</span>
+          <h3 className="job-title">{job.title}</h3>
+          <div className="business-sub">
+            <span className="business-name">{job.business.business_name}</span>
+            <span className="bullet-sep">·</span>
+            <span className="business-rating">
+              <Star size={12} color="#f59e0b" fill="#f59e0b" />
+              {job.business.rating}
+            </span>
+            <span className="business-jobs">
+              ({job.business.jobs_completed} {t.jobsCompleted})
+            </span>
           </div>
         </div>
-        <div className="wage-badge" style={{ fontSize: '1.05rem', padding: '6px 12px' }}>
+        <div className="wage-badge">
           ₹{job.wage}/{lang === 'hi' ? 'दिन' : 'day'}
         </div>
       </div>
 
-      <div className="job-meta-grid" style={{ margin: '4px 0' }}>
-        <div className="meta-chip distance" style={{ fontWeight: 700 }}>
-          <MapPin size={13} />
-          📍 {job.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'} ({job.locality})
-        </div>
+      {/* 2. Metadata Chips (Distance, Timing, Meals) */}
+      <div className="job-meta-grid">
+        <Badge variant="info" icon={<MapPin size={13} />}>
+          {job.distance_km} {lang === 'hi' ? 'किमी दूर' : 'km away'} ({job.locality})
+        </Badge>
 
-        <div className="meta-chip" style={{ fontWeight: 600 }}>
-          <Clock size={13} />
+        <Badge variant="default" icon={<Clock size={13} />}>
           {timingBadge}
-        </div>
+        </Badge>
 
         {job.food_provided && (
-          <div className="meta-chip food" style={{ fontWeight: 600 }}>
-            <Utensils size={13} />
-            🍲 {t.foodProvided}
-          </div>
+          <Badge variant="success" icon={<Utensils size={13} />}>
+            {t.foodProvided}
+          </Badge>
         )}
       </div>
 
+      {/* 3. Job Description */}
       {job.description && (
-        <div className="job-description" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-          {job.description}
-        </div>
+        <p className="job-description">{job.description}</p>
       )}
 
-      <div className="job-actions" style={{ marginTop: '6px' }}>
+      {/* 4. Action CTA */}
+      <div className="job-actions">
         {isApplied ? (
-          <div
-            className="btn-applied"
-            style={{ width: '100%', minHeight: '46px', fontSize: '0.88rem', fontWeight: 700 }}
-          >
-            <CheckCircle2 size={18} />
-            <span>{t.appliedWaiting}</span>
-          </div>
+          <StatusBadge
+            status="applied"
+            label={t.appliedWaiting}
+            className="btn-status-full"
+          />
         ) : isAccepted ? (
-          <div
-            className="btn-confirmed"
-            style={{ width: '100%', minHeight: '46px', fontSize: '0.88rem', fontWeight: 700 }}
-          >
-            <CheckCircle2 size={18} />
-            <span>{t.jobConfirmed}</span>
-          </div>
+          <StatusBadge
+            status="confirmed"
+            label={t.jobConfirmed}
+            className="btn-status-full"
+          />
         ) : (
-          <button
+          <Button
             type="button"
-            className="btn-apply"
+            variant="primary"
+            size="lg"
+            fullWidth
+            leftIcon={<Zap size={16} />}
             onClick={() => onApply(job.id)}
             disabled={loading}
-            style={{
-              width: '100%',
-              minHeight: '46px',
-              fontSize: '0.92rem',
-              fontWeight: 800,
-              background: 'var(--primary)',
-              color: '#000',
-              boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-            }}
           >
-            <Zap size={16} />
             {t.applyNow}
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Card>
   );
 };
