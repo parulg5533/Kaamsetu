@@ -24,6 +24,8 @@ interface GoogleMapProps {
   className?: string;
 }
 
+type MapError = 'NO_KEY' | 'LOAD_FAILED' | 'AUTH_FAILURE' | 'INIT_FAILED';
+
 // Quiet, uncluttered Google Maps light style (Uber/Google Maps consumer grade)
 const MINIMAL_MAP_STYLES = [
   { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
@@ -32,6 +34,201 @@ const MINIMAL_MAP_STYLES = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cce5ff' }] },
   { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#f8fafc' }] },
 ];
+
+const SCRIPT_ID = 'google-maps-script';
+const STAR_SVG =
+  '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>';
+
+/* ------------------------------------------------------------------------ */
+/* Module-level Google Maps loader (script injected once, promise cached)    */
+/* ------------------------------------------------------------------------ */
+
+let mapsPromise: Promise<void> | null = null;
+let authFailed = false;
+let authHooked = false;
+const authListeners = new Set<() => void>();
+
+function hookAuthFailure() {
+  if (authHooked || typeof window === 'undefined') return;
+  authHooked = true;
+  (window as any).gm_authFailure = () => {
+    authFailed = true;
+    authListeners.forEach((listener) => listener());
+  };
+}
+
+/**
+ * Injects the Google Maps JS script once and caches the load promise.
+ * On failure the cache is cleared (and the <script> removed) so a later mount can retry.
+ */
+export function loadGoogleMaps(apiKey: string): Promise<void> {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('Google Maps can only load in the browser'));
+  }
+  hookAuthFailure();
+
+  if ((window as any).google?.maps) return Promise.resolve();
+  if (mapsPromise) return mapsPromise;
+
+  mapsPromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script');
+    script.id = SCRIPT_ID;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places,geometry`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      script.remove();
+      mapsPromise = null;
+      reject(new Error('Failed to load Google Maps script'));
+    };
+    document.head.appendChild(script);
+  });
+
+  return mapsPromise;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Overlay classes (created lazily once the google.maps namespace exists)    */
+/* ------------------------------------------------------------------------ */
+
+interface OverlayClasses {
+  Price: new (item: MapMarkerItem, selected: boolean, onActivate: (item: MapMarkerItem) => void) => any;
+  User: new () => any;
+}
+
+let overlayClasses: { g: any; classes: OverlayClasses } | null = null;
+
+function getOverlayClasses(g: any): OverlayClasses {
+  if (overlayClasses && overlayClasses.g === g) return overlayClasses.classes;
+
+  class PriceMarkerOverlay extends g.maps.OverlayView {
+    private el: HTMLButtonElement | null = null;
+    private item: MapMarkerItem;
+    private selected: boolean;
+    private onActivate: (item: MapMarkerItem) => void;
+    private pos: any;
+
+    constructor(item: MapMarkerItem, selected: boolean, onActivate: (item: MapMarkerItem) => void) {
+      super();
+      this.item = item;
+      this.selected = selected;
+      this.onActivate = onActivate;
+      this.pos = new g.maps.LatLng(item.lat, item.lng);
+    }
+
+    onAdd() {
+      // Native <button>: focusable and activated by Enter/Space via the click event.
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.style.position = 'absolute';
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.onActivate(this.item);
+      });
+      this.el = el;
+      this.applyState();
+      this.getPanes()?.overlayMouseTarget.appendChild(el);
+      this.draw();
+    }
+
+    private applyState() {
+      const el = this.el;
+      if (!el) return;
+      el.className = `custom-price-marker${this.selected ? ' active' : ''}`;
+      el.setAttribute('aria-label', `${this.item.title}, ${this.item.priceLabel}`);
+      el.setAttribute('aria-pressed', this.selected ? 'true' : 'false');
+      el.textContent = '';
+
+      const label = document.createElement('span');
+      label.textContent = this.item.priceLabel;
+      el.appendChild(label);
+
+      if (this.item.rating) {
+        const rating = document.createElement('span');
+        rating.className = 'marker-rating';
+        rating.innerHTML = STAR_SVG;
+        rating.appendChild(document.createTextNode(` ${this.item.rating}`));
+        el.appendChild(rating);
+      }
+    }
+
+    update(item: MapMarkerItem, selected: boolean) {
+      this.item = item;
+      this.selected = selected;
+      this.pos = new g.maps.LatLng(item.lat, item.lng);
+      this.applyState();
+      this.draw();
+    }
+
+    draw() {
+      const projection = this.getProjection();
+      if (!projection || !this.el) return;
+      const px = projection.fromLatLngToDivPixel(this.pos);
+      if (px) {
+        this.el.style.left = px.x + 'px';
+        this.el.style.top = px.y + 'px';
+      }
+    }
+
+    onRemove() {
+      if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el);
+      this.el = null;
+    }
+  }
+
+  class UserLocationOverlay extends g.maps.OverlayView {
+    private div: HTMLDivElement | null = null;
+    private pos: any = null;
+
+    onAdd() {
+      const div = document.createElement('div');
+      div.style.position = 'absolute';
+      div.style.transform = 'translate(-50%, -50%)';
+      div.style.pointerEvents = 'none';
+      div.innerHTML = `
+        <div style="position: relative; width: 18px; height: 18px;">
+          <div style="position: absolute; inset: -6px; border-radius: 50%; background: rgba(37, 99, 235, 0.25); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <div style="width: 16px; height: 16px; border-radius: 50%; background: #2563eb; border: 3px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>
+        </div>
+      `;
+      this.div = div;
+      this.getPanes()?.overlayMouseTarget.appendChild(div);
+      this.draw();
+    }
+
+    setPosition(lat: number, lng: number) {
+      this.pos = new g.maps.LatLng(lat, lng);
+      this.draw();
+    }
+
+    draw() {
+      const projection = this.getProjection();
+      if (!projection || !this.div || !this.pos) return;
+      const px = projection.fromLatLngToDivPixel(this.pos);
+      if (px) {
+        this.div.style.left = px.x + 'px';
+        this.div.style.top = px.y + 'px';
+      }
+    }
+
+    onRemove() {
+      if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+      this.div = null;
+    }
+  }
+
+  const classes: OverlayClasses = {
+    Price: PriceMarkerOverlay as unknown as OverlayClasses['Price'],
+    User: UserLocationOverlay as unknown as OverlayClasses['User'],
+  };
+  overlayClasses = { g, classes };
+  return classes;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Component                                                                 */
+/* ------------------------------------------------------------------------ */
 
 export const GoogleMap: React.FC<GoogleMapProps> = ({
   center,
@@ -44,63 +241,53 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<{ [id: string]: any }>({});
+  const userOverlayRef = useRef<any>(null);
+  const markerOverlaysRef = useRef<Map<string, any>>(new Map());
+  const onSelectRef = useRef(onSelectMarker);
 
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [loadError, setLoadError] = useState<MapError | null>(null);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
-  // 1. Script Loader for Google Maps JavaScript API
+  // Keep the latest callback without rebuilding markers when its identity changes.
   useEffect(() => {
-    if (!apiKey) {
-      setMapError('API_KEY_NOT_CONFIGURED');
-      return;
-    }
+    onSelectRef.current = onSelectMarker;
+  }, [onSelectMarker]);
 
-    if (typeof window !== 'undefined' && (window as any).google?.maps) {
-      setMapLoaded(true);
-      return;
-    }
+  // 1. Load the script and subscribe to auth-failure notifications.
+  useEffect(() => {
+    if (!apiKey) return;
+    let isMounted = true;
 
-    const scriptId = 'google-maps-script';
-    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+    const handleAuthFailure = () => {
+      if (isMounted) setLoadError('AUTH_FAILURE');
+    };
+    authListeners.add(handleAuthFailure);
+    if (authFailed) handleAuthFailure();
 
-    if (!script) {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry`;
-      script.async = true;
-      script.defer = true;
+    loadGoogleMaps(apiKey)
+      .then(() => {
+        if (isMounted && !authFailed) setMapReady(true);
+      })
+      .catch(() => {
+        if (isMounted) setLoadError('LOAD_FAILED');
+      });
 
-      script.onload = () => {
-        setMapLoaded(true);
-      };
-
-      script.onerror = () => {
-        setMapError('FAILED_TO_LOAD_SCRIPT');
-      };
-
-      // Listen for auth failure
-      (window as any).gm_authFailure = () => {
-        setMapError('AUTH_FAILURE');
-      };
-
-      document.head.appendChild(script);
-    } else {
-      script.addEventListener('load', () => setMapLoaded(true));
-      script.addEventListener('error', () => setMapError('FAILED_TO_LOAD_SCRIPT'));
-    }
+    return () => {
+      isMounted = false;
+      authListeners.delete(handleAuthFailure);
+    };
   }, [apiKey]);
 
-  // 2. Initialize Map Instance
+  // 2. Create the map once, then pan it when the center changes.
   useEffect(() => {
-    if (!mapLoaded || !mapContainerRef.current || !(window as any).google?.maps) return;
-
+    if (!mapReady || !mapContainerRef.current || !(window as any).google?.maps) return;
     const g = (window as any).google;
+
     try {
       if (!mapInstanceRef.current) {
-        const map = new g.maps.Map(mapContainerRef.current, {
+        mapInstanceRef.current = new g.maps.Map(mapContainerRef.current, {
           center: { lat: center.lat, lng: center.lng },
           zoom,
           disableDefaultUI: true,
@@ -108,140 +295,81 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
           styles: MINIMAL_MAP_STYLES,
           gestureHandling: 'greedy',
         });
-        mapInstanceRef.current = map;
       } else {
         mapInstanceRef.current.panTo({ lat: center.lat, lng: center.lng });
+        mapInstanceRef.current.setZoom(zoom);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating Google Map instance:', err);
-      setMapError('MAP_INIT_ERROR');
+      setLoadError('INIT_FAILED');
     }
-  }, [mapLoaded, center.lat, center.lng, zoom]);
+  }, [mapReady, center.lat, center.lng, zoom]);
 
-  // 3. Render Custom Markers via OverlayView
+  // 3. User-location pulse overlay follows the center.
   useEffect(() => {
-    if (!mapLoaded || !mapInstanceRef.current || !(window as any).google?.maps) return;
-
+    if (!mapReady || !mapInstanceRef.current) return;
     const g = (window as any).google;
-    const map = mapInstanceRef.current;
+    if (!g?.maps) return;
 
-    // Clear old markers
-    Object.values(markersRef.current).forEach((overlay: any) => {
-      if (overlay && overlay.setMap) overlay.setMap(null);
-    });
-    markersRef.current = {};
-
-    // Center marker (User GPS position pulse)
-    class UserLocationOverlay extends g.maps.OverlayView {
-      div: HTMLDivElement | null = null;
-      position: any;
-
-      constructor(pos: any) {
-        super();
-        this.position = pos;
-      }
-
-      onAdd() {
-        const div = document.createElement('div');
-        div.style.position = 'absolute';
-        div.style.transform = 'translate(-50%, -50%)';
-        div.style.pointerEvents = 'none';
-        div.innerHTML = `
-          <div style="position: relative; width: 18px; height: 18px;">
-            <div style="position: absolute; inset: -6px; border-radius: 50%; background: rgba(37, 99, 235, 0.25); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
-            <div style="width: 16px; height: 16px; border-radius: 50%; background: #2563eb; border: 3px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>
-          </div>
-        `;
-        this.div = div;
-        const panes = this.getPanes();
-        panes?.overlayMouseTarget.appendChild(div);
-      }
-
-      draw() {
-        const overlayProjection = this.getProjection();
-        if (!overlayProjection || !this.div) return;
-        const pos = overlayProjection.fromLatLngToDivPixel(this.position);
-        if (pos) {
-          this.div.style.left = pos.x + 'px';
-          this.div.style.top = pos.y + 'px';
-        }
-      }
-
-      onRemove() {
-        if (this.div && this.div.parentNode) {
-          this.div.parentNode.removeChild(this.div);
-          this.div = null;
-        }
-      }
+    if (!userOverlayRef.current) {
+      const { User } = getOverlayClasses(g);
+      userOverlayRef.current = new User();
+      userOverlayRef.current.setMap(mapInstanceRef.current);
     }
+    userOverlayRef.current.setPosition(center.lat, center.lng);
+  }, [mapReady, center.lat, center.lng]);
 
-    const userOverlay = new UserLocationOverlay(new g.maps.LatLng(center.lat, center.lng));
-    userOverlay.setMap(map);
-    markersRef.current['__user_loc'] = userOverlay;
+  // 4. Diff price-pin overlays by marker id: add new, update existing, remove missing.
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    const g = (window as any).google;
+    if (!g?.maps) return;
 
-    // Custom HTML Price Pills for Workers or Jobs
-    markers.forEach((item) => {
-      class PriceMarkerOverlay extends g.maps.OverlayView {
-        div: HTMLDivElement | null = null;
-        position: any;
+    const { Price } = getOverlayClasses(g);
+    const map = mapInstanceRef.current;
+    const overlays = markerOverlaysRef.current;
+    const activate = (item: MapMarkerItem) => onSelectRef.current?.(item);
+    const nextIds = new Set(markers.map((m) => m.id));
 
-        constructor(pos: any) {
-          super();
-          this.position = pos;
-        }
-
-        onAdd() {
-          const isSelected = selectedMarkerId === item.id;
-          const div = document.createElement('div');
-          div.className = `custom-price-marker ${isSelected ? 'active' : ''}`;
-          div.style.position = 'absolute';
-          div.style.cursor = 'pointer';
-
-          const ratingHtml = item.rating
-            ? `<span class="marker-rating"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg> ${item.rating}</span>`
-            : '';
-
-          div.innerHTML = `
-            <span>${item.priceLabel}</span>
-            ${ratingHtml}
-          `;
-
-          div.onclick = (e: any) => {
-            e.stopPropagation();
-            if (onSelectMarker) onSelectMarker(item);
-          };
-
-          this.div = div;
-          const panes = this.getPanes();
-          panes?.overlayMouseTarget.appendChild(div);
-        }
-
-        draw() {
-          const overlayProjection = this.getProjection();
-          if (!overlayProjection || !this.div) return;
-          const pos = overlayProjection.fromLatLngToDivPixel(this.position);
-          if (pos) {
-            this.div.style.left = pos.x + 'px';
-            this.div.style.top = pos.y + 'px';
-          }
-        }
-
-        onRemove() {
-          if (this.div && this.div.parentNode) {
-            this.div.parentNode.removeChild(this.div);
-            this.div = null;
-          }
-        }
+    overlays.forEach((overlay, id) => {
+      if (!nextIds.has(id)) {
+        overlay.setMap(null);
+        overlays.delete(id);
       }
-
-      const overlay = new PriceMarkerOverlay(new g.maps.LatLng(item.lat, item.lng));
-      overlay.setMap(map);
-      markersRef.current[item.id] = overlay;
     });
-  }, [mapLoaded, markers, selectedMarkerId, center.lat, center.lng, onSelectMarker]);
 
-  // Non-blocking Dev Placeholder when Google Maps API key is not configured or fails
-  if (mapError) {
+    markers.forEach((item) => {
+      const selected = selectedMarkerId === item.id;
+      const existing = overlays.get(item.id);
+      if (existing) {
+        existing.update(item, selected);
+      } else {
+        const overlay = new Price(item, selected, activate);
+        overlay.setMap(map);
+        overlays.set(item.id, overlay);
+      }
+    });
+  }, [mapReady, markers, selectedMarkerId]);
+
+  // Remove every overlay when the component unmounts.
+  useEffect(() => {
+    const overlays = markerOverlaysRef.current;
+    return () => {
+      overlays.forEach((overlay) => overlay.setMap(null));
+      overlays.clear();
+      if (userOverlayRef.current) userOverlayRef.current.setMap(null);
+      userOverlayRef.current = null;
+    };
+  }, []);
+
+  // Fallback: no API key, or the script / auth / init failed. Never claim "loaded" here.
+  const fallbackMessage: string | null = !apiKey
+    ? 'Map preview unavailable (no API key)'
+    : loadError
+      ? 'Map failed to load'
+      : null;
+
+  if (fallbackMessage) {
     return (
       <div className={`map-viewport dev-map-placeholder ${className}`} style={{ height }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -257,16 +385,14 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         <div style={{ margin: 'auto 0', textAlign: 'center', padding: '10px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
             <Info size={14} color="var(--brand-accent)" />
-            {apiKey
-              ? 'Google Maps loaded in dev-ready mode'
-              : 'Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env for live tiles'}
+            {fallbackMessage}
           </div>
           <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Tap any nearby pin below to inspect details directly:
+            Select any nearby pin below to see details:
           </div>
         </div>
 
-        {/* Interactive pin selector in development fallback */}
+        {/* Keyboard-accessible pin list used when the live map is unavailable */}
         <div className="dev-map-pin-list">
           {markers.map((m) => {
             const isSelected = selectedMarkerId === m.id;
@@ -275,7 +401,9 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
                 key={m.id}
                 type="button"
                 className={`dev-pin-chip ${isSelected ? 'active' : ''}`}
-                onClick={() => onSelectMarker && onSelectMarker(m)}
+                aria-label={`${m.title}, ${m.priceLabel}`}
+                aria-pressed={isSelected}
+                onClick={() => onSelectRef.current?.(m)}
               >
                 <MapPin size={12} color={isSelected ? 'var(--brand-accent-hover)' : 'var(--text-muted)'} />
                 <span>{m.title}</span>

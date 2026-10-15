@@ -1,27 +1,54 @@
-import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { ok, handleRouteError, readJson, HttpError } from '@/lib/http';
+import { sendOtpSchema } from '@/lib/validation';
+import {
+  generateOtp,
+  hashOtp,
+  isOtpDevMode,
+  OTP_MAX_PER_HOUR,
+  OTP_RESEND_COOLDOWN_MS,
+  OTP_TTL_MS,
+  sendOtpSms,
+} from '@/lib/otp';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { phone } = body;
+    const { phone } = sendOtpSchema.parse(await readJson(request));
+    const now = Date.now();
 
-    if (!phone || phone.length < 10) {
-      return NextResponse.json(
-        { success: false, error: 'Please provide a valid 10-digit phone number' },
-        { status: 400 }
-      );
+    const latest = await prisma.otpRequest.findFirst({
+      where: { phone },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    if (latest && now - latest.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS) {
+      throw new HttpError(429, 'RATE_LIMITED', 'Please wait a moment before requesting another code');
     }
 
-    // In V1 pilot / prototype mode, OTP is fixed to 1234 for instant zero-friction testing
-    return NextResponse.json({
-      success: true,
-      message: `OTP sent successfully to ${phone}`,
-      dev_otp: '1234',
+    const hourCount = await prisma.otpRequest.count({
+      where: { phone, createdAt: { gte: new Date(now - 60 * 60 * 1000) } },
     });
-  } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    if (hourCount >= OTP_MAX_PER_HOUR) {
+      throw new HttpError(429, 'RATE_LIMITED', 'Too many codes requested. Try again later');
+    }
+
+    const code = generateOtp();
+    await prisma.otpRequest.create({
+      data: {
+        phone,
+        codeHash: hashOtp(phone, code),
+        expiresAt: new Date(now + OTP_TTL_MS),
+      },
+    });
+    await sendOtpSms(phone, code);
+
+    return ok({
+      message: 'OTP sent',
+      ...(isOtpDevMode() ? { dev_otp: code } : {}),
+    });
+  } catch (err) {
+    return handleRouteError(err, 'auth/send-otp');
   }
 }

@@ -2,28 +2,43 @@
 
 import React from 'react';
 import { Star } from 'lucide-react';
-import { Language, translations } from '@/lib/translations';
+import { Language } from '@/lib/translations';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import type { FeedbackTag } from '@/lib/status';
 
 interface RatingModalProps {
   lang: Language;
   isOpen: boolean;
   onClose: () => void;
   target: {
-    jobId: string;
-    toUserId: string;
+    applicationId: string;
     toName: string;
-    role: string;
+    role: 'WORKER' | 'BUSINESS';
   } | null;
   ratingValue: number;
   onChangeRating: (val: number) => void;
-  selectedTag: string;
-  onSelectTag: (tag: string) => void;
+  selectedTag: FeedbackTag | null;
+  onSelectTag: (tag: FeedbackTag | null) => void;
   comment: string;
   onChangeComment: (comment: string) => void;
   onSubmitReview: () => void;
   loading: boolean;
 }
+
+// Display labels for the stable FEEDBACK_TAGS keys. Keys are sent to the API; labels are display-only.
+const TAG_LABELS: Record<FeedbackTag, { en: string; hi: string }> = {
+  PUNCTUAL: { en: 'Punctual', hi: 'समय पर आए' },
+  HARDWORKING: { en: 'Hardworking', hi: 'मेहनती' },
+  SKILLED: { en: 'Skilled', hi: 'कुशल' },
+  POLITE: { en: 'Polite', hi: 'सभ्य व्यवहार' },
+  PAID_ON_TIME: { en: 'Paid On Time', hi: 'समय पर भुगतान' },
+  FAIR_WORKLOAD: { en: 'Fair Workload', hi: 'उचित काम का बोझ' },
+  GOOD_FOOD: { en: 'Good Food', hi: 'अच्छा खाना' },
+  RESPECTFUL: { en: 'Respectful', hi: 'सम्मानजनक व्यवहार' },
+};
+
+const WORKER_TAGS: FeedbackTag[] = ['PUNCTUAL', 'HARDWORKING', 'SKILLED', 'POLITE'];
+const BUSINESS_TAGS: FeedbackTag[] = ['PAID_ON_TIME', 'FAIR_WORKLOAD', 'GOOD_FOOD', 'RESPECTFUL'];
 
 export const RatingModal: React.FC<RatingModalProps> = ({
   lang,
@@ -41,15 +56,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
 }) => {
   if (!isOpen || !target) return null;
 
-  const workerTags = lang === 'hi'
-    ? ['समय पर आए (Punctual)', 'मेहनती (Hardworking)', 'सभ्य व्यवहार (Polite)', 'तेज़ काम (Fast)']
-    : ['Punctual', 'Hardworking', 'Polite', 'Quick Work'];
-
-  const customerTags = lang === 'hi'
-    ? ['समय पर भुगतान (Paid On Time)', 'अच्छा व्यवहार (Kind)', 'साफ निर्देश दिए (Clear Instructions)', 'सुरक्षित माहौल (Safe)']
-    : ['Paid On Time', 'Respectful & Kind', 'Clear Instructions', 'Safe Environment'];
-
-  const activeTags = target.role === 'WORKER' ? workerTags : customerTags;
+  const activeTags = target.role === 'WORKER' ? WORKER_TAGS : BUSINESS_TAGS;
 
   return (
     <BottomSheet
@@ -91,6 +98,8 @@ export const RatingModal: React.FC<RatingModalProps> = ({
                 key={star}
                 type="button"
                 onClick={() => onChangeRating(star)}
+                aria-label={lang === 'hi' ? `5 में से ${star} स्टार` : `${star} of 5 stars`}
+                aria-pressed={ratingValue === star}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -117,12 +126,13 @@ export const RatingModal: React.FC<RatingModalProps> = ({
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
             {activeTags.map((tag) => {
-              const isSelected = selectedTag === tag.split(' (')[0];
+              const isSelected = selectedTag === tag;
               return (
                 <button
                   key={tag}
                   type="button"
-                  onClick={() => onSelectTag(tag.split(' (')[0])}
+                  aria-pressed={isSelected}
+                  onClick={() => onSelectTag(isSelected ? null : tag)}
                   style={{
                     padding: '6px 12px',
                     borderRadius: 'var(--radius-full)',
@@ -134,7 +144,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
                     cursor: 'pointer',
                   }}
                 >
-                  {tag}
+                  {TAG_LABELS[tag][lang === 'hi' ? 'hi' : 'en']}
                 </button>
               );
             })}

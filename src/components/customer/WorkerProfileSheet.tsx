@@ -1,21 +1,18 @@
 'use client';
 
 import React from 'react';
+import { Star, MapPin, ArrowLeft, X, Zap } from 'lucide-react';
+import { Language } from '@/lib/translations';
 import {
-  Star,
-  MapPin,
-  ShieldCheck,
-  CheckCircle2,
-  Clock,
-  Phone,
-  ArrowLeft,
-  X,
-  Zap,
-} from 'lucide-react';
-import { Language, translations } from '@/lib/translations';
-import { NearbyWorker, getWorkerTradeDetails } from './WorkerCard';
+  NearbyWorker,
+  getWorkerTradeDetails,
+  getAvailabilityInfo,
+  isRated,
+  formatRatingText,
+  getNewWorkerLabel,
+} from './WorkerCard';
 
-interface WorkerProfileSheetProps {
+export interface WorkerProfileSheetProps {
   lang: Language;
   worker: NearbyWorker | null;
   isOpen: boolean;
@@ -31,8 +28,8 @@ export const WorkerProfileSheet: React.FC<WorkerProfileSheetProps> = ({
   onHireWorker,
 }) => {
   if (!isOpen || !worker) return null;
-  const t = translations[lang];
   const trade = getWorkerTradeDetails(worker.skills, lang);
+  const availability = getAvailabilityInfo(worker.availability, lang);
 
   return (
     <div className="fullscreen-view" role="dialog" aria-modal="true">
@@ -54,6 +51,7 @@ export const WorkerProfileSheet: React.FC<WorkerProfileSheetProps> = ({
         <button
           type="button"
           onClick={onClose}
+          aria-label={lang === 'hi' ? 'बंद करें' : 'Close'}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
         >
           <X size={20} />
@@ -83,25 +81,26 @@ export const WorkerProfileSheet: React.FC<WorkerProfileSheetProps> = ({
           </div>
 
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {worker.name}
-              </h1>
-              <ShieldCheck size={18} color="var(--brand-success)" />
-            </div>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {worker.name}
+            </h1>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.88rem' }}>
               <span style={{ color: 'var(--brand-accent)' }}>{trade.icon}</span>
               <span>{trade.name}</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-              {worker.rating > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginTop: '4px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              {isRated(worker) ? (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 700, color: 'var(--text-primary)' }}>
                   <Star size={13} fill="#f59e0b" color="#f59e0b" />
-                  <span>{worker.rating.toFixed(1)}</span>
-                  <span>({worker.jobs_completed} {lang === 'hi' ? 'काम पूरे' : 'jobs completed'})</span>
+                  <span>{formatRatingText(worker)}</span>
                 </span>
+              ) : (
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{getNewWorkerLabel(lang)}</span>
+              )}
+              {worker.jobs_completed > 0 && (
+                <span>· {worker.jobs_completed} {lang === 'hi' ? 'काम पूरे' : 'jobs completed'}</span>
               )}
             </div>
           </div>
@@ -131,48 +130,34 @@ export const WorkerProfileSheet: React.FC<WorkerProfileSheetProps> = ({
             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
               {lang === 'hi' ? 'उपलब्धता' : 'Availability'}
             </div>
-            <div style={{ fontSize: '0.86rem', fontWeight: 800, color: 'var(--brand-success)', marginTop: '2px' }}>
-              {worker.availability === 'AVAILABLE_TODAY'
-                ? (lang === 'hi' ? 'आज उपलब्ध' : 'Available Today')
-                : (lang === 'hi' ? 'पूछें' : 'Contact')}
+            <div style={{ fontSize: '0.86rem', fontWeight: 800, color: availability.color, marginTop: '2px' }}>
+              {availability.label}
             </div>
           </div>
 
           <div style={{ padding: '8px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-              {lang === 'hi' ? 'उपस्थिति दर' : 'Attendance'}
+              {lang === 'hi' ? 'पूरे किए काम' : 'Jobs done'}
             </div>
             <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
-              {worker.attendance_rate || 98}%
+              {worker.jobs_completed}
             </div>
           </div>
         </div>
 
-        {/* Trust Signals */}
+        {/* Location */}
         <div style={{ padding: '16px 0', borderBottom: '1px solid var(--border-subtle)' }}>
           <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '10px' }}>
-            {lang === 'hi' ? 'सत्यापन और सुरक्षा' : 'Trust & Verification'}
+            {lang === 'hi' ? 'स्थान' : 'Location'}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <CheckCircle2 size={16} color="var(--brand-success)" />
-              <span style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                {lang === 'hi' ? 'ओटीपी सत्यापित मोबाइल नंबर' : 'Phone Number Verified via OTP'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Clock size={16} color="var(--brand-primary)" />
-              <span style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                {lang === 'hi' ? 'आमतौर पर 10 मिनट के अंदर उत्तर देता है' : 'Usually responds within 10 minutes'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <MapPin size={16} color="var(--brand-accent)" />
-              <span style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                {lang === 'hi' ? `${worker.locality || 'स्थानीय क्षेत्र'}, ${worker.city} का निवासी` : `Resident of ${worker.locality || 'Local Area'}, ${worker.city}`}
-              </span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <MapPin size={16} color="var(--brand-accent)" />
+            <span style={{ fontSize: '0.84rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+              {lang === 'hi'
+                ? `${worker.locality || 'स्थानीय क्षेत्र'}, ${worker.city}`
+                : `${worker.locality || 'Local Area'}, ${worker.city}`}
+            </span>
           </div>
         </div>
 

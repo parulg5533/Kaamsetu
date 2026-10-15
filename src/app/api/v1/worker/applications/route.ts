@@ -1,31 +1,23 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getAuthSession } from '@/lib/auth';
+import { requireWorker } from '@/lib/auth';
+import { handleRouteError, ok } from '@/lib/http';
+import { MATCHED_STATUSES } from '@/lib/status';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const session = await getAuthSession(request);
-    const { searchParams } = new URL(request.url);
-    const workerId = session?.userId || searchParams.get('worker_id');
-
-    if (!workerId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: missing worker identification' },
-        { status: 401 }
-      );
-    }
+    const { worker } = await requireWorker();
 
     const applications = await prisma.application.findMany({
-      where: { workerId },
+      where: { workerId: worker.userId },
       include: {
         job: {
           include: {
             skill: true,
             business: {
               include: {
-                user: { select: { phone: true, name: true } },
+                user: { select: { name: true, phone: true } },
               },
             },
           },
@@ -35,13 +27,17 @@ export async function GET(request: Request) {
     });
 
     const formatted = applications.map((app) => {
-      const isAccepted = app.status === 'ACCEPTED' || app.status === 'COMPLETED';
+      // Contact details are revealed only once the two parties are matched.
+      const matched = MATCHED_STATUSES.includes(app.status);
+      const business = app.job.business;
       return {
         id: app.id,
         status: app.status,
         applied_at: app.appliedAt,
-        worker_confirmed_completed: app.workerConfirmedCompleted,
-        business_confirmed_completed: app.businessConfirmedCompleted,
+        started_at: app.startedAt,
+        worker_confirmed: !!app.workerConfirmedAt,
+        business_confirmed: !!app.businessConfirmedAt,
+        completed_at: app.completedAt,
         job: {
           id: app.job.id,
           title: app.job.title,
@@ -55,26 +51,19 @@ export async function GET(request: Request) {
           locality: app.job.locality,
           status: app.job.status,
           business: {
-            id: app.job.business.userId,
-            business_name: app.job.business.businessName,
-            business_type: app.job.business.businessType,
-            locality: app.job.business.locality,
-            // CRITICAL PRIVACY BOUNDARY: Phone is revealed ONLY when accepted!
-            phone: isAccepted ? app.job.business.user.phone : null,
-            owner_name: isAccepted ? app.job.business.user.name : null,
+            id: business.userId,
+            business_name: business.businessName,
+            business_type: business.businessType,
+            locality: business.locality,
+            phone: matched ? business.user.phone : null,
+            owner_name: matched ? business.user.name : null,
           },
         },
       };
     });
 
-    return NextResponse.json({
-      success: true,
-      applications: formatted,
-    });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch applications' },
-      { status: 500 }
-    );
+    return ok({ applications: formatted });
+  } catch (err) {
+    return handleRouteError(err, 'worker.applications.list');
   }
 }

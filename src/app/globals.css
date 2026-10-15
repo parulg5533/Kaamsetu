@@ -423,6 +423,24 @@ html, body {
   color: #78350f;
 }
 
+/* Native <button> price pins inherit the map label typography */
+button.custom-price-marker {
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+/* User-location pulse on the map (GoogleMap.tsx) */
+@keyframes ping {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
 /* Developer Map Placeholder (Clean, Honest, Not Fake Vector) */
 .dev-map-placeholder {
   width: 100%;

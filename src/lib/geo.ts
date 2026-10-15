@@ -30,3 +30,24 @@ export function calculateDistanceKm(
 
   return Math.round(distance * 10) / 10;
 }
+
+/**
+ * Returns a lat/lng bounding box that fully contains a circle of `radiusKm` around a point.
+ * Used as a cheap indexed pre-filter before the exact Haversine check.
+ */
+export function boundingBox(lat: number, lng: number, radiusKm: number) {
+  const latDelta = radiusKm / 111.32;
+  const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
+  const lngDelta = radiusKm / (111.32 * cosLat);
+  return {
+    minLat: lat - latDelta,
+    maxLat: lat + latDelta,
+    minLng: lng - lngDelta,
+    maxLng: lng + lngDelta,
+  };
+}
+
+/** Rounds a coordinate to ~110 m precision so exact worker homes are not exposed. */
+export function approximateCoord(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}

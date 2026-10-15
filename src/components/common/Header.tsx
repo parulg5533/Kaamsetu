@@ -1,10 +1,10 @@
 'use client';
 
 import React from 'react';
-import { MapPin, Globe, ChevronDown, LogOut, ArrowLeftRight } from 'lucide-react';
-import { Language, translations } from '@/lib/translations';
+import { MapPin, Globe, ChevronDown, ArrowLeftRight } from 'lucide-react';
+import { Language } from '@/lib/translations';
 
-interface HeaderProps {
+export interface HeaderProps {
   lang: Language;
   onToggleLang: () => void;
   currentUser: {
@@ -15,9 +15,11 @@ interface HeaderProps {
   localityName?: string;
   isGpsActive?: boolean;
   onOpenLocationModal: () => void;
+  /** Shown when logged out. */
   onOpenLogin: () => void;
-  onToggleRole?: () => void;
-  onLogout: () => void;
+  /** Shown when logged in (avatar button). */
+  onOpenProfile: () => void;
+  onToggleRole?: () => Promise<void> | void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,11 +30,9 @@ export const Header: React.FC<HeaderProps> = ({
   isGpsActive = false,
   onOpenLocationModal,
   onOpenLogin,
+  onOpenProfile,
   onToggleRole,
-  onLogout,
 }) => {
-  const t = translations[lang];
-
   return (
     <header className="app-header">
       {/* Location Selector (Uber / Zomato style) */}
@@ -48,6 +48,22 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="header-location-text">
           <div className="header-location-locality">
             <span>{localityName}</span>
+            {isGpsActive && (
+              <span
+                role="img"
+                aria-label={lang === 'hi' ? 'लाइव GPS सक्रिय' : 'Live GPS active'}
+                title={lang === 'hi' ? 'लाइव GPS सक्रिय' : 'Live GPS active'}
+                style={{
+                  display: 'inline-block',
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: 'var(--radius-full)',
+                  backgroundColor: '#16a34a',
+                  boxShadow: '0 0 0 2px rgba(22, 163, 74, 0.2)',
+                  flexShrink: 0,
+                }}
+              />
+            )}
             <ChevronDown size={14} color="var(--text-muted)" />
           </div>
           <div className="header-location-sub">
@@ -73,7 +89,9 @@ export const Header: React.FC<HeaderProps> = ({
         {currentUser && onToggleRole && (
           <button
             type="button"
-            onClick={onToggleRole}
+            onClick={() => {
+              void onToggleRole();
+            }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -99,7 +117,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             className="header-profile-btn"
-            onClick={onOpenLogin}
+            onClick={onOpenProfile}
+            aria-label={lang === 'hi' ? 'प्रोफ़ाइल खोलें' : 'Open profile'}
             title={currentUser.name}
           >
             {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}

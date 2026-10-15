@@ -2,39 +2,124 @@
 
 import React from 'react';
 import { MapPin, Clock, Utensils, Star, Zap, Check } from 'lucide-react';
-import { Language, translations } from '@/lib/translations';
+import { Language } from '@/lib/translations';
+import type { ApplicationStatus } from '@/lib/status';
+import type { NearbyJob } from '@/lib/types/worker';
 
-export interface NearbyJob {
-  id: string;
-  title: string;
-  description: string;
-  skill_name: string;
-  skill_id: string;
-  wage: number;
-  food_provided: boolean;
-  job_date: string;
-  start_time: string;
-  end_time: string;
-  locality: string;
-  workers_required: number;
-  workers_accepted: number;
-  distance_km: number;
-  business: {
-    id: string;
-    business_name: string;
-    business_type?: string;
-    locality?: string;
-    rating?: number;
-    jobs_completed?: number;
-  };
-  my_application_status: string | null;
-  application_id: string | null;
+export type { NearbyJob } from '@/lib/types/worker';
+
+/** What the worker can do with a job, derived from their own application on it. */
+export type JobActionState = 'APPLY' | 'APPLIED' | 'HIRED' | 'FILLED' | 'DONE';
+
+export function getJobActionState(status: ApplicationStatus | null): JobActionState {
+  switch (status) {
+    case 'APPLIED':
+      return 'APPLIED';
+    case 'ACCEPTED':
+    case 'IN_PROGRESS':
+      return 'HIRED';
+    case 'REJECTED':
+      return 'FILLED';
+    case 'COMPLETED':
+      return 'DONE';
+    default:
+      // null (no application) or WITHDRAWN: the worker may apply.
+      return 'APPLY';
+  }
 }
 
-interface JobCardProps {
+const ACTION_LABELS: Record<JobActionState, { en: string; hi: string }> = {
+  APPLY: { en: 'Apply for this Job', hi: 'आवेदन करें (Apply Now)' },
+  APPLIED: { en: 'Applied · Waiting for customer', hi: 'आवेदन भेजा गया · स्वीकृति की प्रतीक्षा' },
+  HIRED: { en: 'Hired ✓', hi: 'काम मिल गया ✓' },
+  FILLED: { en: 'Position filled', hi: 'यह पद भर गया है' },
+  DONE: { en: 'Completed ✓', hi: 'काम पूरा हुआ ✓' },
+};
+
+export function getJobActionLabel(state: JobActionState, lang: Language): string {
+  return lang === 'hi' ? ACTION_LABELS[state].hi : ACTION_LABELS[state].en;
+}
+
+/** Business rating, or "New" until the business has at least one review. */
+export const BusinessRating: React.FC<{ lang: Language; rating: number; ratingCount: number }> = ({
+  lang,
+  rating,
+  ratingCount,
+}) => {
+  if (ratingCount < 1) {
+    return (
+      <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>
+        {lang === 'hi' ? 'नया' : 'New'}
+      </span>
+    );
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: 'var(--text-primary)', fontWeight: 700 }}>
+      <Star size={11} fill="#f59e0b" color="#f59e0b" />
+      {rating.toFixed(1)}
+    </span>
+  );
+};
+
+export const InvitedBadge: React.FC<{ lang: Language }> = ({ lang }) => (
+  <span
+    style={{
+      display: 'inline-flex',
+      alignSelf: 'flex-start',
+      fontSize: '0.7rem',
+      fontWeight: 800,
+      padding: '2px 8px',
+      borderRadius: '999px',
+      backgroundColor: 'var(--brand-success-subtle)',
+      color: 'var(--brand-success)',
+      marginBottom: '4px',
+    }}
+  >
+    {lang === 'hi' ? 'आपको बुलाया' : 'Invited you'}
+  </span>
+);
+
+function statusBoxStyle(state: Exclude<JobActionState, 'APPLY'>): React.CSSProperties {
+  const base: React.CSSProperties = {
+    padding: '8px 12px',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: '0.82rem',
+    fontWeight: 700,
+    textAlign: 'center',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  };
+  if (state === 'HIRED') {
+    return {
+      ...base,
+      backgroundColor: 'var(--brand-success-subtle)',
+      border: '1px solid var(--brand-success)',
+      color: 'var(--brand-success)',
+    };
+  }
+  if (state === 'APPLIED') {
+    return {
+      ...base,
+      backgroundColor: 'var(--bg-subtle)',
+      border: '1px solid var(--border-subtle)',
+      color: 'var(--brand-accent-hover)',
+    };
+  }
+  return {
+    ...base,
+    backgroundColor: 'var(--bg-subtle)',
+    border: '1px solid var(--border-subtle)',
+    color: 'var(--text-muted)',
+  };
+}
+
+export interface JobCardProps {
   lang: Language;
   job: NearbyJob;
   onApply: (jobId: string) => void;
+  onWithdrawJob?: (jobId: string) => void;
   loading: boolean;
 }
 
@@ -42,29 +127,22 @@ export const JobCard: React.FC<JobCardProps> = ({
   lang,
   job,
   onApply,
+  onWithdrawJob,
   loading,
 }) => {
-  const t = translations[lang];
-  const isApplied = job.my_application_status === 'APPLIED';
-  const isAccepted = job.my_application_status === 'ACCEPTED';
+  const actionState = getJobActionState(job.my_application_status);
 
   return (
     <div className="job-item">
       {/* Header: Title & Wage */}
       <div className="job-header-row">
         <div>
+          {job.is_invited && <InvitedBadge lang={lang} />}
           <h3 className="job-title">{job.title}</h3>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span>{job.business.business_name}</span>
-            {job.business.rating && job.business.rating > 0 && (
-              <>
-                <span>·</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: 'var(--text-primary)', fontWeight: 700 }}>
-                  <Star size={11} fill="#f59e0b" color="#f59e0b" />
-                  {job.business.rating}
-                </span>
-              </>
-            )}
+            <span>·</span>
+            <BusinessRating lang={lang} rating={job.business.rating} ratingCount={job.business.rating_count} />
           </div>
         </div>
 
@@ -104,42 +182,7 @@ export const JobCard: React.FC<JobCardProps> = ({
 
       {/* Action Button */}
       <div style={{ marginTop: '4px' }}>
-        {isApplied ? (
-          <div
-            style={{
-              padding: '8px 12px',
-              backgroundColor: 'var(--bg-subtle)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              color: 'var(--brand-accent-hover)',
-              textAlign: 'center',
-            }}
-          >
-            {lang === 'hi' ? 'आवेदन भेजा गया · स्वीकृति की प्रतीक्षा' : 'Applied · Waiting for customer'}
-          </div>
-        ) : isAccepted ? (
-          <div
-            style={{
-              padding: '8px 12px',
-              backgroundColor: 'var(--brand-success-subtle)',
-              border: '1px solid var(--brand-success)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              color: 'var(--brand-success)',
-              textAlign: 'center',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <Check size={16} />
-            <span>{lang === 'hi' ? 'काम पक्का हुआ ✓' : 'Job Accepted & Confirmed ✓'}</span>
-          </div>
-        ) : (
+        {actionState === 'APPLY' ? (
           <button
             type="button"
             className="btn btn-primary"
@@ -148,7 +191,24 @@ export const JobCard: React.FC<JobCardProps> = ({
             disabled={loading}
           >
             <Zap size={15} />
-            <span>{lang === 'hi' ? 'आवेदन करें (Apply Now)' : 'Apply for this Job'}</span>
+            <span>{getJobActionLabel(actionState, lang)}</span>
+          </button>
+        ) : (
+          <div style={statusBoxStyle(actionState)}>
+            {actionState === 'HIRED' && <Check size={16} />}
+            <span>{getJobActionLabel(actionState, lang)}</span>
+          </div>
+        )}
+
+        {actionState === 'APPLIED' && onWithdrawJob && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ width: '100%', minHeight: '38px', fontSize: '0.86rem', marginTop: '8px' }}
+            onClick={() => onWithdrawJob(job.id)}
+            disabled={loading}
+          >
+            <span>{lang === 'hi' ? 'आवेदन वापस लें' : 'Withdraw'}</span>
           </button>
         )}
       </div>

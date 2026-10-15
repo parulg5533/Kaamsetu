@@ -1,23 +1,34 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireBusiness } from '@/lib/auth';
+import { HttpError, handleRouteError, ok } from '@/lib/http';
 import { calculateDistanceKm } from '@/lib/geo';
+import { APPLICATION_STATUS, MATCHED_STATUSES } from '@/lib/status';
+
+export const dynamic = 'force-dynamic';
+
+/** Lower rank sorts first: matched applicants, then new applicants, then everyone else. */
+function statusRank(status: string): number {
+  if (MATCHED_STATUSES.includes(status)) return 0;
+  if (status === APPLICATION_STATUS.APPLIED) return 1;
+  return 2;
+}
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const jobId = params.id;
+    const { business } = await requireBusiness();
 
     const job = await prisma.job.findUnique({
-      where: { id: jobId },
+      where: { id: params.id },
       include: {
         applications: {
           include: {
             worker: {
               include: {
                 user: { select: { name: true, phone: true } },
-                skills: { include: { skill: true } },
+                skills: { include: { skill: { select: { name: true } } } },
               },
             },
           },
@@ -25,63 +36,50 @@ export async function GET(
       },
     });
 
-    if (!job) {
-      return NextResponse.json(
-        { success: false, error: 'Job not found' },
-        { status: 404 }
-      );
+    if (!job) throw new HttpError(404, 'NOT_FOUND', 'Job not found');
+    if (job.businessId !== business.userId) {
+      throw new HttpError(403, 'NOT_YOUR_JOB', 'You can only view applicants for your own jobs');
     }
 
-    const applicants = job.applications.map((app: any) => {
-      const distanceKm = calculateDistanceKm(
-        job.latitude,
-        job.longitude,
-        app.worker.latitude,
-        app.worker.longitude
-      );
-
-      const isAccepted = app.status === 'ACCEPTED' || app.status === 'COMPLETED';
-
+    const applicants = job.applications.map((app) => {
+      const worker = app.worker;
+      const matched = MATCHED_STATUSES.includes(app.status);
       return {
         application_id: app.id,
-        worker_id: app.worker.userId,
-        name: app.worker.user.name,
-        // Worker phone is unlocked only after acceptance
-        phone: isAccepted ? app.worker.user.phone : null,
-        city: app.worker.city,
-        locality: app.worker.locality,
-        rating: app.worker.rating,
-        rating_count: app.worker.ratingCount,
-        jobs_completed: app.worker.jobsCompleted,
-        attendance_rate: app.worker.attendanceRate,
-        experience_years: app.worker.experienceYears,
-        expected_wage: app.worker.expectedWage,
-        distance_km: distanceKm,
+        worker_id: app.workerId,
+        name: worker.user.name,
+        // Worker phone is revealed only once the application is matched.
+        phone: matched ? worker.user.phone : null,
+        city: worker.city,
+        locality: worker.locality,
+        rating: worker.rating,
+        rating_count: worker.ratingCount,
+        jobs_completed: worker.jobsCompleted,
+        experience_years: worker.experienceYears,
+        expected_wage: worker.expectedWage,
+        distance_km: calculateDistanceKm(job.latitude, job.longitude, worker.latitude, worker.longitude),
         status: app.status,
         applied_at: app.appliedAt,
-        skills: app.worker.skills.map((s: any) => s.skill.name),
+        skills: worker.skills.map((s) => s.skill.name),
       };
     });
 
-    // Sort applicants: ACCEPTED first, then by distance ascending, then rating descending
-    applicants.sort((a: any, b: any) => {
-      if (a.status === 'ACCEPTED' && b.status !== 'ACCEPTED') return -1;
-      if (b.status === 'ACCEPTED' && a.status !== 'ACCEPTED') return 1;
-      return a.distance_km - b.distance_km || b.rating - a.rating;
-    });
+    applicants.sort(
+      (a, b) =>
+        statusRank(a.status) - statusRank(b.status) ||
+        a.distance_km - b.distance_km ||
+        b.rating - a.rating
+    );
 
-    return NextResponse.json({
-      success: true,
+    return ok({
       job_id: job.id,
       title: job.title,
+      status: job.status,
       workers_required: job.workersRequired,
       workers_accepted: job.workersAccepted,
       applicants,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch applicants' },
-      { status: 500 }
-    );
+  } catch (err) {
+    return handleRouteError(err, 'business.jobs.applicants');
   }
 }

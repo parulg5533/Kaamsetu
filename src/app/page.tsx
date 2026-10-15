@@ -1,107 +1,182 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Briefcase,
   CheckCircle2,
-  ShieldCheck,
-  MapPin,
-  Phone,
-  User as UserIcon,
+  AlertCircle,
   Sparkles,
-  Star,
   LogOut,
   ArrowLeftRight,
 } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
+import type { MeUser } from '@/lib/me';
+import type { ActiveWorkItem } from '@/lib/types/active-work';
+import type { NearbyJob, WorkerApplication } from '@/lib/types/worker';
+import type { ApplicationStatus, Availability, FeedbackTag } from '@/lib/status';
 
 // Components
 import { Header } from '@/components/common/Header';
 import { BottomNav, NavTab } from '@/components/common/BottomNav';
-import { OnboardingModal } from '@/components/common/OnboardingModal';
-import { MessagesView, ActiveCoordinationItem } from '@/components/common/MessagesView';
+import { OnboardingModal, OnboardingCompletePayload } from '@/components/common/OnboardingModal';
+import { MessagesView } from '@/components/common/MessagesView';
 import { RatingModal } from '@/components/common/RatingModal';
 import { LocationModal, LocationItem } from '@/components/map/LocationModal';
-import { CustomerHome } from '@/components/customer/CustomerHome';
-import { PostJobSheet } from '@/components/customer/PostJobSheet';
-import { ApplicantSheet } from '@/components/customer/ApplicantSheet';
-import { WorkerHome } from '@/components/worker/WorkerHome';
+import { CustomerHome, CustomerHomeSkill, CustomerJob } from '@/components/customer/CustomerHome';
+import { PostJobSheet, PostJobPayload, InvitedWorker } from '@/components/customer/PostJobSheet';
+import { ApplicantSheet, Applicant, ApplicantSheetJob } from '@/components/customer/ApplicantSheet';
+import { WorkerHome, WorkerHomeProps } from '@/components/worker/WorkerHome';
 import { NearbyWorker } from '@/components/customer/WorkerCard';
-import { NearbyJob } from '@/components/worker/JobCard';
-import { WorkerApplication } from '@/components/worker/ApplicationsList';
 
-interface UserSession {
-  id: string;
-  name: string;
-  phone: string;
+// ---------------------------------------------------------------------------
+// Types & helpers
+// ---------------------------------------------------------------------------
+
+interface UserLocation {
+  lat: number;
+  lng: number;
+  locality: string;
+  isLive: boolean;
+}
+
+interface Notice {
+  text: string;
+  variant: 'success' | 'error';
+}
+
+interface RatingTarget {
+  applicationId: string;
+  toName: string;
   role: 'WORKER' | 'BUSINESS';
 }
 
+type WorkerProfileState = NonNullable<WorkerHomeProps['workerProfile']>;
+
+type ApiData<T> = Partial<T> & { error?: string };
+
+/** Skill as returned by GET /api/v1/skills. */
+type SkillOption = CustomerHomeSkill & { slug: string };
+
+interface ApiResult<T> {
+  ok: boolean;
+  status: number;
+  data: ApiData<T>;
+}
+
+const NETWORK_ERROR = 'Network error. Please try again.';
+const NOTICE_DURATION_MS = 3500;
+const ACTIVE_WORK_POLL_MS = 25000;
+const NEARBY_MAX_DISTANCE = '25.0';
+
+const DEFAULT_LOCATION: UserLocation = {
+  lat: 31.634,
+  lng: 74.8723,
+  locality: 'Ranjit Avenue, Amritsar',
+  isLive: false,
+};
+
+const APPLICATION_STATUS_LABEL: Record<ApplicationStatus, { en: string; hi: string }> = {
+  APPLIED: { en: 'Applied', hi: 'आवेदन किया' },
+  ACCEPTED: { en: 'Accepted', hi: 'स्वीकृत' },
+  IN_PROGRESS: { en: 'In progress', hi: 'काम जारी है' },
+  COMPLETED: { en: 'Completed', hi: 'पूरा हुआ' },
+  REJECTED: { en: 'Not selected', hi: 'चुना नहीं गया' },
+  WITHDRAWN: { en: 'Withdrawn', hi: 'वापस लिया' },
+};
+
+/** Thin fetch wrapper. Session cookie is sent automatically (same-origin). Never throws. */
+async function api<T extends object>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  try {
+    const headers = new Headers(init?.headers);
+    if (init?.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    const res = await fetch(path, { ...init, headers, credentials: 'same-origin' });
+    let data: ApiData<T> = {};
+    try {
+      data = ((await res.json()) ?? {}) as ApiData<T>;
+    } catch {
+      data = {};
+    }
+    return { ok: res.ok, status: res.status, data };
+  } catch {
+    return { ok: false, status: 0, data: { error: NETWORK_ERROR } as ApiData<T> };
+  }
+}
+
+const jsonBody = (body: unknown): string => JSON.stringify(body);
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function KaamSetuApp() {
-  // Global State
+  // Global state
   const [lang, setLang] = useState<Language>('en');
-  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
-  const [token, setToken] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<MeUser | null>(null);
   const [activeNavTab, setActiveNavTab] = useState<NavTab>('EXPLORE');
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [loading, setLoading] = useState(false); // data loading
+  const [actionBusy, setActionBusy] = useState(false); // posting a job, submitting a review
 
-  // Active Location
-  const [userLocation, setUserLocation] = useState<{
-    lat: number;
-    lng: number;
-    locality: string;
-    isLive: boolean;
-  }>({
-    lat: 31.6340,
-    lng: 74.8723,
-    locality: 'Ranjit Avenue, Amritsar',
-    isLive: false,
-  });
+  const [userLocation, setUserLocation] = useState<UserLocation>(DEFAULT_LOCATION);
 
-  // Modals & Sheets
+  // Modals & sheets
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [showPostJobSheet, setShowPostJobSheet] = useState(false);
-  const [preSelectedWorker, setPreSelectedWorker] = useState<NearbyWorker | null>(null);
+  const [invitedWorker, setInvitedWorker] = useState<InvitedWorker | null>(null);
   const [showApplicantSheet, setShowApplicantSheet] = useState(false);
-  const [selectedJobForApplicants, setSelectedJobForApplicants] = useState<any | null>(null);
-  const [applicantsList, setApplicantsList] = useState<any[]>([]);
+  const [applicantJob, setApplicantJob] = useState<ApplicantSheetJob | null>(null);
+  const [applicants, setApplicants] = useState<Applicant[] | null>(null);
 
-  // Rating Modal
+  // Rating modal
   const [showRatingModal, setShowRatingModal] = useState(false);
-  const [ratingTarget, setRatingTarget] = useState<{
-    jobId: string;
-    toUserId: string;
-    toName: string;
-    role: string;
-  } | null>(null);
+  const [ratingTarget, setRatingTarget] = useState<RatingTarget | null>(null);
   const [ratingValue, setRatingValue] = useState(5);
-  const [selectedTag, setSelectedTag] = useState('Punctual');
+  const [selectedTag, setSelectedTag] = useState<FeedbackTag | null>(null);
   const [ratingComment, setRatingComment] = useState('');
 
-  // Core Data
-  const [skillsList, setSkillsList] = useState<any[]>([]);
+  // Core data
+  const [skillsList, setSkillsList] = useState<SkillOption[]>([]);
   const [nearbyWorkers, setNearbyWorkers] = useState<NearbyWorker[]>([]);
-  const [customerJobs, setCustomerJobs] = useState<any[]>([]);
+  const [customerJobs, setCustomerJobs] = useState<CustomerJob[]>([]);
 
-  // Worker Data
-  const [workerProfile, setWorkerProfile] = useState<any | null>(null);
-  const [availability, setAvailability] = useState<string>('AVAILABLE_TODAY');
+  // Worker data
+  const [workerProfile, setWorkerProfile] = useState<WorkerProfileState | null>(null);
+  const [availability, setAvailability] = useState<Availability>('AVAILABLE_TODAY');
   const [nearbyJobs, setNearbyJobs] = useState<NearbyJob[]>([]);
   const [workerApplications, setWorkerApplications] = useState<WorkerApplication[]>([]);
 
-  // Active Job Coordinations (End-to-End Lifecycle)
-  const [coordinations, setCoordinations] = useState<ActiveCoordinationItem[]>([]);
+  // Active work (server-side lifecycle)
+  const [activeWork, setActiveWork] = useState<ActiveWorkItem[]>([]);
+
+  // Refs: one notification timer, and request counters to drop stale responses.
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customerReqRef = useRef(0);
+  const workerReqRef = useRef(0);
+  const activeWorkReqRef = useRef(0);
+  const applicantsReqRef = useRef(0);
 
   const t = translations[lang];
+  const tr = (en: string, hi: string) => (lang === 'hi' ? hi : en);
 
-  const showNotification = (msg: string) => {
-    setStatusMessage(msg);
-    setTimeout(() => setStatusMessage(null), 3500);
-  };
+  const showNotification = useCallback((text: string, variant: Notice['variant'] = 'success') => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setNotice({ text, variant });
+    noticeTimerRef.current = setTimeout(() => {
+      setNotice(null);
+      noticeTimerRef.current = null;
+    }, NOTICE_DURATION_MS);
+  }, []);
 
-  // 1. Dynamic Geolocation Detection on Mount
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    };
+  }, []);
+
+  // 1. Initial GPS detection on mount
   useEffect(() => {
     if (typeof window !== 'undefined' && 'geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -119,382 +194,424 @@ export default function KaamSetuApp() {
     }
   }, []);
 
-  // 2. Load Skills & Stored Session
+  // 2. Skills and the current session
   useEffect(() => {
-    fetch('/api/v1/skills')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.skills) setSkillsList(data.skills);
-      })
-      .catch((err) => console.error('Error loading skills:', err));
-
-    const savedUser = typeof window !== 'undefined' ? localStorage.getItem('kaamsetu_user') : null;
-    const savedToken = typeof window !== 'undefined' ? localStorage.getItem('kaamsetu_token') : null;
-
-    if (savedUser && savedToken) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        setCurrentUser(parsed);
-        setToken(savedToken);
-      } catch (e) {
-        localStorage.removeItem('kaamsetu_user');
-        localStorage.removeItem('kaamsetu_token');
+    let cancelled = false;
+    (async () => {
+      const skillsRes = await api<{ skills: SkillOption[] }>('/api/v1/skills');
+      if (!cancelled && skillsRes.ok && skillsRes.data.skills) {
+        setSkillsList(skillsRes.data.skills);
       }
-    } else {
-      // Default to customer experience or present onboarding if requested
-      setCurrentUser({
-        id: 'customer-guest',
-        name: 'Guest Customer',
-        phone: '9812345678',
-        role: 'BUSINESS',
-      });
-    }
+      const meRes = await api<{ user: MeUser | null }>('/api/v1/auth/me');
+      if (!cancelled && meRes.ok) {
+        setCurrentUser(meRes.data.user ?? null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // 3. Load Customer Data
-  const loadCustomerData = useCallback(async () => {
-    setLoading(true);
-    try {
-      // 1. Fetch nearby workers using dynamic coordinates
-      const workersRes = await fetch(
-        `/api/v1/workers/nearby?lat=${userLocation.lat}&lng=${userLocation.lng}&max_distance=25.0`
-      );
-      const workersData = await workersRes.json();
-      if (workersData.success) {
-        setNearbyWorkers(workersData.workers || []);
-      }
-
-      // 2. Fetch customer jobs
-      if (currentUser && currentUser.id) {
-        const jobsRes = await fetch(`/api/v1/business/jobs?business_id=${currentUser.id}`);
-        const jobsData = await jobsRes.json();
-        if (jobsData.success) {
-          setCustomerJobs(jobsData.jobs || []);
-        }
-      }
-    } catch (err) {
-      console.error('Error loading customer data:', err);
-    } finally {
+  // 3. Data loaders (guarded against stale responses)
+  const loadCustomerData = useCallback(
+    async (lat: number, lng: number, hasBusiness: boolean) => {
+      const reqId = ++customerReqRef.current;
+      setLoading(true);
+      const [workersRes, jobsRes] = await Promise.all([
+        api<{ workers: NearbyWorker[] }>(
+          `/api/v1/workers/nearby?lat=${lat}&lng=${lng}&max_distance=${NEARBY_MAX_DISTANCE}`
+        ),
+        hasBusiness ? api<{ jobs: CustomerJob[] }>('/api/v1/business/jobs') : Promise.resolve(null),
+      ]);
+      if (reqId !== customerReqRef.current) return;
+      if (workersRes.ok) setNearbyWorkers(workersRes.data.workers ?? []);
+      setCustomerJobs(jobsRes && jobsRes.ok ? jobsRes.data.jobs ?? [] : []);
       setLoading(false);
-    }
-  }, [currentUser, userLocation]);
+    },
+    []
+  );
 
-  // 4. Load Worker Data
-  const loadWorkerData = useCallback(async () => {
-    if (!currentUser) return;
+  const loadWorkerData = useCallback(async (lat: number, lng: number) => {
+    const reqId = ++workerReqRef.current;
     setLoading(true);
-    try {
-      // 1. Profile
-      const profRes = await fetch(`/api/v1/worker/profile?userId=${currentUser.id}`);
-      const profData = await profRes.json();
-      if (profData.success && profData.worker) {
-        setWorkerProfile(profData.worker);
-        setAvailability(profData.worker.availability);
-      }
-
-      // 2. Nearby jobs
-      const jobsRes = await fetch(
-        `/api/v1/jobs/nearby?lat=${userLocation.lat}&lng=${userLocation.lng}&max_distance=25.0&worker_id=${currentUser.id}`
-      );
-      const jobsData = await jobsRes.json();
-      if (jobsData.success) {
-        setNearbyJobs(jobsData.jobs || []);
-      }
-
-      // 3. Applications
-      const appsRes = await fetch(`/api/v1/worker/applications?worker_id=${currentUser.id}`);
-      const appsData = await appsRes.json();
-      if (appsData.success) {
-        setWorkerApplications(appsData.applications || []);
-        // Populate active accepted jobs in coordination
-        const accepted = (appsData.applications || []).filter((a: any) => a.status === 'ACCEPTED');
-        if (accepted.length > 0) {
-          setCoordinations(
-            accepted.map((app: any) => ({
-              jobId: app.job.id,
-              title: app.job.title,
-              locality: app.job.locality || userLocation.locality,
-              wage: app.job.wage,
-              stage: 'ACCEPTED_EN_ROUTE',
-              counterpartId: app.job.business?.id || 'biz-1',
-              counterpartName: app.job.business?.business_name || 'Customer',
-              counterpartPhone: app.job.business?.phone || '9812345678',
-              counterpartRole: 'CUSTOMER',
-              startOtp: '7821',
-            }))
-          );
-        }
-      }
-    } catch (err) {
-      console.error('Error loading worker data:', err);
-    } finally {
-      setLoading(false);
+    const [profRes, jobsRes, appsRes] = await Promise.all([
+      api<{ worker: WorkerProfileState }>('/api/v1/worker/profile'),
+      api<{ jobs: NearbyJob[] }>(
+        `/api/v1/jobs/nearby?lat=${lat}&lng=${lng}&max_distance=${NEARBY_MAX_DISTANCE}`
+      ),
+      api<{ applications: WorkerApplication[] }>('/api/v1/worker/applications'),
+    ]);
+    if (reqId !== workerReqRef.current) return;
+    if (profRes.ok && profRes.data.worker) {
+      setWorkerProfile(profRes.data.worker);
+      setAvailability(profRes.data.worker.availability as Availability);
     }
-  }, [currentUser, userLocation]);
+    if (jobsRes.ok) setNearbyJobs(jobsRes.data.jobs ?? []);
+    if (appsRes.ok) setWorkerApplications(appsRes.data.applications ?? []);
+    setLoading(false);
+  }, []);
 
+  const loadActiveWork = useCallback(async () => {
+    const reqId = ++activeWorkReqRef.current;
+    const res = await api<{ items: ActiveWorkItem[] }>('/api/v1/me/active-work');
+    if (reqId !== activeWorkReqRef.current) return;
+    if (res.ok) setActiveWork(res.data.items ?? []);
+  }, []);
+
+  /** Loads applicants for one job. A newer call (another job opened, or a refresh) makes this result stale. */
+  const loadApplicants = async (jobId: string) => {
+    const reqId = ++applicantsReqRef.current;
+    const res = await api<{ applicants: Applicant[] }>(`/api/v1/business/jobs/${jobId}/applicants`);
+    if (reqId !== applicantsReqRef.current) return;
+    if (res.ok) {
+      setApplicants(res.data.applicants ?? []);
+    } else {
+      setApplicants([]);
+      showNotification(res.data.error || tr('Could not load applicants', 'आवेदक लोड नहीं हो सके'), 'error');
+    }
+  };
+
+  // Load the data for the current role (or the logged-out customer view).
   useEffect(() => {
-    if (currentUser?.role === 'BUSINESS') {
-      loadCustomerData();
-    } else if (currentUser?.role === 'WORKER') {
-      loadWorkerData();
-    }
-  }, [currentUser, loadCustomerData, loadWorkerData]);
-
-  // Actions
-  const handleToggleRole = () => {
-    if (!currentUser) return;
-    const newRole = currentUser.role === 'WORKER' ? 'BUSINESS' : 'WORKER';
-    const updated = { ...currentUser, role: newRole as 'WORKER' | 'BUSINESS' };
-    setCurrentUser(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('kaamsetu_user', JSON.stringify(updated));
-    }
-    showNotification(lang === 'hi' ? `भूमिका बदली गई: ${newRole}` : `Switched role to ${newRole}`);
-  };
-
-  const handleSetAvailability = async (newStatus: string) => {
-    if (!currentUser) return;
-    setAvailability(newStatus);
-    try {
-      await fetch('/api/v1/worker/availability', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, availability: newStatus }),
-      });
-      showNotification(lang === 'hi' ? 'उपलब्धता अपडेट की गई' : 'Availability status updated');
-    } catch (err) {
-      console.error('Error setting availability:', err);
-    }
-  };
-
-  const handleApplyJob = async (jobId: string) => {
-    if (!currentUser) return;
-    try {
-      const res = await fetch(`/api/v1/jobs/${jobId}/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workerId: currentUser.id }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showNotification(lang === 'hi' ? 'आवेदन भेजा गया!' : 'Job applied successfully!');
-        loadWorkerData();
-      } else {
-        alert(data.error || 'Failed to apply');
-      }
-    } catch (err) {
-      console.error('Error applying:', err);
-    }
-  };
-
-  const handlePostJobSubmit = async (formData: any) => {
-    if (!currentUser) return;
-    setLoading(true);
-    try {
-      const res = await fetch('/api/v1/business/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          businessId: currentUser.id,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setShowPostJobSheet(false);
-        setPreSelectedWorker(null);
-        showNotification(
-          lang === 'hi'
-            ? 'काम पोस्ट हो गया! पास के कामगारों को सूचना दी गई है।'
-            : 'Work request posted! Nearby workers notified.'
-        );
-        loadCustomerData();
-
-        // Simulate match & coordination
-        setCoordinations((prev) => [
-          ...prev,
-          {
-            jobId: data.job?.id || 'job-new',
-            title: formData.title,
-            locality: formData.locality,
-            wage: formData.wage,
-            stage: 'ACCEPTED_EN_ROUTE',
-            counterpartId: preSelectedWorker?.id || 'worker-1',
-            counterpartName: preSelectedWorker?.name || 'Ramesh Kumar',
-            counterpartPhone: '9876543210',
-            counterpartRole: 'WORKER',
-            startOtp: '7821',
-          },
-        ]);
-      } else {
-        alert(data.error || 'Failed to post job');
-      }
-    } catch (err) {
-      console.error('Error posting job:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleViewApplicants = async (job: any) => {
-    setSelectedJobForApplicants(job);
-    setShowApplicantSheet(true);
-    try {
-      const res = await fetch(`/api/v1/business/jobs/${job.id}/applicants`);
-      const data = await res.json();
-      if (data.success) {
-        setApplicantsList(data.applicants || []);
-      }
-    } catch (err) {
-      console.error('Error loading applicants:', err);
-    }
-  };
-
-  const handleAcceptWorker = async (applicationId: string) => {
-    try {
-      const res = await fetch(`/api/v1/applications/${applicationId}/accept`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (data.success) {
-        showNotification(lang === 'hi' ? 'कामगार स्वीकार किया गया!' : 'Worker accepted!');
-        if (selectedJobForApplicants) {
-          handleViewApplicants(selectedJobForApplicants);
-        }
-        loadCustomerData();
-
-        // Add to active coordinations
-        setCoordinations((prev) => [
-          ...prev,
-          {
-            jobId: selectedJobForApplicants?.id || 'job-accepted',
-            title: selectedJobForApplicants?.title || 'Work in progress',
-            locality: selectedJobForApplicants?.locality || userLocation.locality,
-            wage: selectedJobForApplicants?.wage || 650,
-            stage: 'ACCEPTED_EN_ROUTE',
-            counterpartId: data.worker?.id || 'worker-accepted',
-            counterpartName: data.worker?.name || 'Worker',
-            counterpartPhone: data.worker?.phone || '9876543210',
-            counterpartRole: 'WORKER',
-            startOtp: '7821',
-          },
-        ]);
-      }
-    } catch (err) {
-      console.error('Error accepting worker:', err);
-    }
-  };
-
-  const handleVerifyCoordinationOtp = (jobId: string, enteredOtp: string) => {
-    if (enteredOtp.trim() === '7821' || enteredOtp.trim().length === 4) {
-      setCoordinations((prev) =>
-        prev.map((c) => (c.jobId === jobId ? { ...c, stage: 'IN_PROGRESS' } : c))
+    if (currentUser?.role === 'WORKER') {
+      loadWorkerData(userLocation.lat, userLocation.lng);
+    } else {
+      loadCustomerData(
+        userLocation.lat,
+        userLocation.lng,
+        currentUser?.role === 'BUSINESS' && currentUser.has_business
       );
-      showNotification(lang === 'hi' ? 'सुरक्षा कोड सत्यापित! कार्य शुरू हुआ।' : 'Security code verified! Work in progress.');
-      return true;
     }
+  }, [currentUser, userLocation.lat, userLocation.lng, loadWorkerData, loadCustomerData]);
+
+  // Active work: load on login/logout.
+  useEffect(() => {
+    if (!currentUser) {
+      activeWorkReqRef.current++;
+      setActiveWork([]);
+      return;
+    }
+    loadActiveWork();
+  }, [currentUser, loadActiveWork]);
+
+  // Active work: poll while the Messages tab is open.
+  useEffect(() => {
+    if (!currentUser || activeNavTab !== 'MESSAGES') return;
+    loadActiveWork();
+    const id = setInterval(loadActiveWork, ACTIVE_WORK_POLL_MS);
+    return () => clearInterval(id);
+  }, [currentUser, activeNavTab, loadActiveWork]);
+
+  /** Re-fetches active work and the role's lists after any lifecycle or posting action. */
+  const refreshAfterAction = () => {
+    loadActiveWork();
+    if (currentUser?.role === 'WORKER') {
+      loadWorkerData(userLocation.lat, userLocation.lng);
+    } else if (currentUser?.role === 'BUSINESS') {
+      loadCustomerData(userLocation.lat, userLocation.lng, currentUser.has_business);
+    }
+  };
+
+  /** Returns true when logged in; otherwise opens onboarding and returns false. */
+  const requireLogin = (): boolean => {
+    if (currentUser) return true;
+    setShowOnboardingModal(true);
     return false;
   };
 
-  const handleConfirmFinish = async (jobId: string) => {
-    if (!currentUser) return;
-    try {
-      await fetch(`/api/v1/jobs/${jobId}/confirm-completion`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, confirmed: true }),
-      });
-      setCoordinations((prev) =>
-        prev.map((c) => (c.jobId === jobId ? { ...c, stage: 'COMPLETED_PENDING_PAYMENT' } : c))
-      );
-      showNotification(lang === 'hi' ? 'कार्य समाप्त घोषित हुआ! कृपया समीक्षा दें।' : 'Work marked finished! Please leave a review.');
-    } catch (err) {
-      console.error('Error confirming finish:', err);
+  const openRating = (target: RatingTarget) => {
+    setRatingTarget(target);
+    setRatingValue(5);
+    setSelectedTag(null);
+    setRatingComment('');
+    setShowRatingModal(true);
+  };
+
+  // -------------------------------------------------------------------------
+  // Auth & role
+  // -------------------------------------------------------------------------
+
+  const handleCompleteOnboarding = async (
+    data: OnboardingCompletePayload
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const res = await api<{ user: MeUser }>('/api/v1/auth/verify-otp', {
+      method: 'POST',
+      body: jsonBody({
+        phone: data.phone,
+        otp: data.otp,
+        role: data.role,
+        name: data.name,
+        locality: data.locality,
+        latitude: data.latitude,
+        longitude: data.longitude,
+      }),
+    });
+    if (!res.ok || !res.data.user) {
+      return { ok: false, error: res.data.error };
+    }
+    setCurrentUser(res.data.user);
+    setShowOnboardingModal(false);
+    showNotification(tr(`Welcome to KaamSetu, ${res.data.user.name}!`, `KaamSetu में स्वागत है, ${res.data.user.name}!`));
+    return { ok: true };
+  };
+
+  const handleLogout = async () => {
+    const res = await api('/api/v1/auth/logout', { method: 'POST' });
+    // Invalidate every in-flight request so nothing repopulates the cleared state.
+    customerReqRef.current++;
+    workerReqRef.current++;
+    activeWorkReqRef.current++;
+    applicantsReqRef.current++;
+
+    setCurrentUser(null);
+    setActiveWork([]);
+    setWorkerProfile(null);
+    setWorkerApplications([]);
+    setNearbyJobs([]);
+    setCustomerJobs([]);
+    setInvitedWorker(null);
+    setShowPostJobSheet(false);
+    setShowApplicantSheet(false);
+    setApplicantJob(null);
+    setApplicants(null);
+    setShowRatingModal(false);
+    setActiveNavTab('EXPLORE');
+
+    if (res.ok) {
+      showNotification(tr('Logged out successfully', 'लॉगआउट कर दिया गया'));
+    } else {
+      showNotification(res.data.error || tr('Signed out here, but the server did not confirm', 'यहाँ लॉगआउट हुआ, पर सर्वर ने पुष्टि नहीं की'), 'error');
     }
   };
+
+  const handleToggleRole = async () => {
+    if (!currentUser) {
+      setShowOnboardingModal(true);
+      return;
+    }
+    const nextRole = currentUser.role === 'WORKER' ? 'BUSINESS' : 'WORKER';
+    const res = await api<{ user: MeUser }>('/api/v1/me/role', {
+      method: 'POST',
+      body: jsonBody({
+        role: nextRole,
+        locality: userLocation.locality,
+        latitude: userLocation.lat,
+        longitude: userLocation.lng,
+      }),
+    });
+    if (!res.ok || !res.data.user) {
+      showNotification(res.data.error || tr('Could not switch role', 'भूमिका नहीं बदली जा सकी'), 'error');
+      return;
+    }
+    setCurrentUser(res.data.user);
+    showNotification(
+      tr(`Switched role to ${res.data.user.role}`, `भूमिका बदली गई: ${res.data.user.role}`)
+    );
+  };
+
+  // -------------------------------------------------------------------------
+  // Location
+  // -------------------------------------------------------------------------
+
+  const handleSelectLocation = (loc: LocationItem) => {
+    const locality = loc.city ? `${loc.locality}, ${loc.city}` : loc.locality;
+    setUserLocation({ lat: loc.lat, lng: loc.lng, locality, isLive: loc.isLive });
+    showNotification(tr(`Location set to ${locality}`, `स्थान सेट किया गया: ${locality}`));
+  };
+
+  // -------------------------------------------------------------------------
+  // Worker actions
+  // -------------------------------------------------------------------------
+
+  const handleSetAvailability = async (newStatus: Availability) => {
+    if (!currentUser) return;
+    const previous = availability;
+    setAvailability(newStatus);
+    const res = await api('/api/v1/worker/availability', {
+      method: 'PUT',
+      body: jsonBody({ availability: newStatus }),
+    });
+    if (!res.ok) {
+      setAvailability(previous);
+      showNotification(res.data.error || tr('Could not update availability', 'उपलब्धता अपडेट नहीं हो सकी'), 'error');
+      return;
+    }
+    showNotification(tr('Availability status updated', 'उपलब्धता अपडेट की गई'));
+  };
+
+  const handleApplyJob = async (jobId: string) => {
+    if (!requireLogin()) return;
+    const res = await api<{ auto_accepted: boolean }>(`/api/v1/jobs/${jobId}/apply`, { method: 'POST' });
+    if (!res.ok) {
+      showNotification(res.data.error || tr('Could not apply for this job', 'इस काम के लिए आवेदन नहीं हो सका'), 'error');
+    } else if (res.data.auto_accepted) {
+      showNotification(tr('Hired directly!', 'सीधे काम पर रखा गया!'));
+    } else {
+      showNotification(tr('Job applied successfully!', 'आवेदन भेजा गया!'));
+    }
+    refreshAfterAction();
+  };
+
+  const handleWithdrawJob = async (jobId: string) => {
+    const res = await api(`/api/v1/jobs/${jobId}/withdraw`, { method: 'POST' });
+    if (!res.ok) {
+      showNotification(res.data.error || tr('Could not withdraw application', 'आवेदन वापस नहीं हो सका'), 'error');
+    } else {
+      showNotification(tr('Application withdrawn', 'आवेदन वापस लिया गया'));
+    }
+    refreshAfterAction();
+  };
+
+  /** Marks this side of an application as finished. Used by the worker home and the Messages tab. */
+  const handleConfirmCompletion = async (applicationId: string): Promise<void> => {
+    const res = await api<{ completed: boolean }>(
+      `/api/v1/applications/${applicationId}/confirm-completion`,
+      { method: 'POST' }
+    );
+    if (!res.ok) {
+      showNotification(res.data.error || tr('Could not mark work finished', 'काम समाप्त नहीं हो सका'), 'error');
+    } else if (res.data.completed) {
+      showNotification(tr('Work completed! Please leave a review.', 'काम पूरा हुआ! कृपया समीक्षा दें।'));
+    } else {
+      showNotification(tr('Waiting for the other side to confirm', 'दूसरे पक्ष की पुष्टि का इंतज़ार है'));
+    }
+    refreshAfterAction();
+  };
+
+  // -------------------------------------------------------------------------
+  // Active work actions (Messages tab)
+  // -------------------------------------------------------------------------
+
+  const handleStartWork = async (applicationId: string, otp: string): Promise<{ ok: boolean; error?: string }> => {
+    const res = await api(`/api/v1/applications/${applicationId}/start`, {
+      method: 'POST',
+      body: jsonBody({ otp }),
+    });
+    if (!res.ok) {
+      return { ok: false, error: res.data.error };
+    }
+    showNotification(tr('Work started!', 'काम शुरू हुआ!'));
+    refreshAfterAction();
+    return { ok: true };
+  };
+
+  const handleConfirmPayment = async (applicationId: string): Promise<void> => {
+    const res = await api(`/api/v1/applications/${applicationId}/confirm-payment`, { method: 'POST' });
+    if (!res.ok) {
+      showNotification(res.data.error || tr('Could not confirm payment', 'भुगतान की पुष्टि नहीं हो सकी'), 'error');
+    } else {
+      showNotification(tr('Payment confirmed', 'भुगतान की पुष्टि हुई'));
+    }
+    refreshAfterAction();
+  };
+
+  // -------------------------------------------------------------------------
+  // Customer actions
+  // -------------------------------------------------------------------------
+
+  const openPostJob = (invite: InvitedWorker | null) => {
+    if (!requireLogin()) return;
+    setInvitedWorker(invite);
+    setShowPostJobSheet(true);
+  };
+
+  const handleRequestHireWorker = (worker: NearbyWorker) => {
+    openPostJob({ id: worker.id, name: worker.name, skillSlug: worker.skills[0]?.slug });
+  };
+
+  const handlePostJobSubmit = async (payload: PostJobPayload): Promise<boolean> => {
+    if (!requireLogin()) return false;
+    const invited = invitedWorker;
+    setActionBusy(true);
+    const res = await api<{ job: CustomerJob }>('/api/v1/business/jobs', {
+      method: 'POST',
+      body: jsonBody(payload),
+    });
+    setActionBusy(false);
+    if (!res.ok) {
+      showNotification(res.data.error || tr('Could not post job', 'काम पोस्ट नहीं हो सका'), 'error');
+      return false;
+    }
+    setShowPostJobSheet(false);
+    setInvitedWorker(null);
+    showNotification(
+      invited
+        ? tr(`Request sent to ${invited.name}`, `${invited.name} को अनुरोध भेजा गया`)
+        : tr('Job posted — waiting for applicants', 'काम पोस्ट हुआ — आवेदकों का इंतज़ार है')
+    );
+    refreshAfterAction();
+    return true;
+  };
+
+  const openApplicants = async (job: ApplicantSheetJob) => {
+    setApplicantJob(job);
+    setApplicants(null);
+    setShowApplicantSheet(true);
+    await loadApplicants(job.id);
+  };
+
+  const handleAcceptWorker = async (applicationId: string): Promise<void> => {
+    const jobId = applicantJob?.id;
+    const res = await api(`/api/v1/applications/${applicationId}/accept`, { method: 'POST' });
+    if (res.ok) {
+      showNotification(tr('Worker accepted!', 'कामगार स्वीकार किया गया!'));
+    } else {
+      showNotification(res.data.error || tr('Could not accept worker', 'कामगार स्वीकार नहीं हो सका'), 'error');
+    }
+    if (jobId) loadApplicants(jobId);
+    refreshAfterAction();
+  };
+
+  const handleRateWorker = (workerId: string, workerName: string) => {
+    const applicant = applicants?.find((a) => a.worker_id === workerId);
+    if (!applicant) {
+      showNotification(tr('Could not find this applicant', 'यह आवेदक नहीं मिला'), 'error');
+      return;
+    }
+    openRating({ applicationId: applicant.application_id, toName: workerName, role: 'WORKER' });
+  };
+
+  // -------------------------------------------------------------------------
+  // Reviews
+  // -------------------------------------------------------------------------
 
   const handleSubmitReview = async () => {
     if (!currentUser || !ratingTarget) return;
-    setLoading(true);
-    try {
-      const res = await fetch('/api/v1/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from_user_id: currentUser.id,
-          to_user_id: ratingTarget.toUserId,
-          job_id: ratingTarget.jobId,
-          rating: ratingValue,
-          feedback_tag: selectedTag,
-          comment: ratingComment,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setShowRatingModal(false);
-        setRatingComment('');
-        showNotification(lang === 'hi' ? 'समीक्षा सबमिट हुई!' : 'Review submitted successfully!');
-      }
-    } catch (err) {
-      console.error('Error submitting review:', err);
-    } finally {
-      setLoading(false);
+    setActionBusy(true);
+    const res = await api('/api/v1/reviews', {
+      method: 'POST',
+      body: jsonBody({
+        application_id: ratingTarget.applicationId,
+        rating: ratingValue,
+        feedback_tag: selectedTag,
+        comment: ratingComment,
+      }),
+    });
+    setActionBusy(false);
+    if (!res.ok) {
+      showNotification(res.data.error || tr('Could not submit review', 'समीक्षा सबमिट नहीं हो सकी'), 'error');
+      return;
     }
+    setShowRatingModal(false);
+    setRatingComment('');
+    showNotification(tr('Review submitted successfully!', 'समीक्षा सबमिट हुई!'));
+    refreshAfterAction();
   };
 
-  const handleCompleteOnboarding = async (userData: any) => {
-    try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: userData.phone,
-          otp: userData.otp,
-          role: userData.role,
-          name: userData.name,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        const userObj: UserSession = {
-          id: data.user.id,
-          name: data.user.name,
-          phone: data.user.phone,
-          role: data.user.role,
-        };
-        setCurrentUser(userObj);
-        setToken(data.token);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('kaamsetu_user', JSON.stringify(userObj));
-          localStorage.setItem('kaamsetu_token', data.token);
-        }
-        setShowOnboardingModal(false);
-        showNotification(`Welcome to KaamSetu, ${userObj.name}!`);
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Onboarding error:', err);
-      return false;
-    }
-  };
+  // -------------------------------------------------------------------------
+  // Derived
+  // -------------------------------------------------------------------------
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setToken('');
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('kaamsetu_user');
-      localStorage.removeItem('kaamsetu_token');
-    }
-    showNotification(lang === 'hi' ? 'लॉगआउट कर दिया गया' : 'Logged out successfully');
-  };
+  const banner = activeWork.find((item) => item.stage === 'IN_PROGRESS' || item.stage === 'ACCEPTED');
+  const isWorker = currentUser?.role === 'WORKER';
 
-  const activeEnRouteJob = coordinations.find((c) => c.stage === 'ACCEPTED_EN_ROUTE' || c.stage === 'IN_PROGRESS');
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
 
   return (
     <>
-      {/* 1. Header with Location Changer */}
+      {/* 1. Header with location changer */}
       <Header
         lang={lang}
         onToggleLang={() => setLang((prev) => (prev === 'en' ? 'hi' : 'en'))}
@@ -503,19 +620,21 @@ export default function KaamSetuApp() {
         isGpsActive={userLocation.isLive}
         onOpenLocationModal={() => setShowLocationModal(true)}
         onOpenLogin={() => setShowOnboardingModal(true)}
+        onOpenProfile={() => setActiveNavTab('PROFILE')}
         onToggleRole={handleToggleRole}
-        onLogout={handleLogout}
       />
 
-      {/* Floating Status Notification */}
-      {statusMessage && (
+      {/* Floating status notification */}
+      {notice && (
         <div
+          role="status"
+          aria-live="polite"
           style={{
             position: 'fixed',
             top: '70px',
             left: '50%',
             transform: 'translateX(-50%)',
-            background: 'var(--brand-primary)',
+            background: notice.variant === 'error' ? 'var(--brand-danger)' : 'var(--brand-primary)',
             color: '#ffffff',
             padding: '8px 18px',
             borderRadius: 'var(--radius-full)',
@@ -526,27 +645,33 @@ export default function KaamSetuApp() {
             alignItems: 'center',
             gap: '8px',
             boxShadow: 'var(--shadow-lg)',
+            maxWidth: 'calc(100vw - 32px)',
           }}
         >
-          <CheckCircle2 size={16} color="#34d399" />
-          <span>{statusMessage}</span>
+          {notice.variant === 'error' ? (
+            <AlertCircle size={16} color="#ffffff" />
+          ) : (
+            <CheckCircle2 size={16} color="#34d399" />
+          )}
+          <span>{notice.text}</span>
         </div>
       )}
 
-      {/* 2. Persistent Non-Intrusive Lifecycle Banner (Only When Job Active) */}
-      {activeEnRouteJob && activeNavTab === 'EXPLORE' && (
+      {/* 2. Lifecycle banner (only while work is accepted or in progress) */}
+      {banner && activeNavTab === 'EXPLORE' && (
         <div className="lifecycle-active-banner">
           <div className="lifecycle-text-group">
             <div className="lifecycle-stage-title">
               <Sparkles size={14} color="var(--brand-accent)" />
               <span>
-                {activeEnRouteJob.stage === 'IN_PROGRESS'
-                  ? (lang === 'hi' ? 'कार्य प्रगति पर है' : 'Work in progress')
-                  : (lang === 'hi' ? `${activeEnRouteJob.counterpartName} आ रहे हैं` : `${activeEnRouteJob.counterpartName} is en route`)}
+                {banner.stage === 'IN_PROGRESS'
+                  ? tr('Work in progress', 'कार्य प्रगति पर है')
+                  : tr(`${banner.counterpart.name} is en route`, `${banner.counterpart.name} आ रहे हैं`)}
               </span>
             </div>
             <div className="lifecycle-sub">
-              {activeEnRouteJob.title} · {activeEnRouteJob.locality}
+              {banner.title}
+              {banner.locality ? ` · ${banner.locality}` : ''}
             </div>
           </div>
 
@@ -555,15 +680,15 @@ export default function KaamSetuApp() {
             className="lifecycle-action-btn"
             onClick={() => setActiveNavTab('MESSAGES')}
           >
-            {lang === 'hi' ? 'विवरण / कॉल →' : 'View / Call →'}
+            {tr('View / Call →', 'विवरण / कॉल →')}
           </button>
         </div>
       )}
 
-      {/* 3. Main Body Tabs */}
+      {/* 3. Main body tabs */}
       <main className="main-content">
-        {activeNavTab === 'EXPLORE' && (
-          currentUser?.role === 'WORKER' ? (
+        {activeNavTab === 'EXPLORE' &&
+          (isWorker ? (
             <WorkerHome
               lang={lang}
               workerProfile={workerProfile}
@@ -573,11 +698,12 @@ export default function KaamSetuApp() {
               applications={workerApplications}
               userLocation={userLocation}
               onApplyJob={handleApplyJob}
-              onConfirmCompleted={handleConfirmFinish}
-              onRateBusiness={(bizId, bizName, jobId) => {
-                setRatingTarget({ jobId, toUserId: bizId, toName: bizName, role: 'BUSINESS' });
-                setShowRatingModal(true);
-              }}
+              onWithdrawJob={handleWithdrawJob}
+              onConfirmCompleted={handleConfirmCompletion}
+              onRateBusiness={(_businessId, businessName, applicationId) =>
+                openRating({ applicationId, toName: businessName, role: 'BUSINESS' })
+              }
+              onOpenMessages={() => setActiveNavTab('MESSAGES')}
               loading={loading}
             />
           ) : (
@@ -587,110 +713,126 @@ export default function KaamSetuApp() {
               workers={nearbyWorkers}
               customerJobs={customerJobs}
               userLocation={userLocation}
-              onOpenPostJob={() => {
-                setPreSelectedWorker(null);
-                setShowPostJobSheet(true);
-              }}
-              onRequestHireWorker={(worker) => {
-                setPreSelectedWorker(worker);
-                setShowPostJobSheet(true);
-              }}
-              onViewApplicants={handleViewApplicants}
+              onOpenPostJob={() => openPostJob(null)}
+              onRequestHireWorker={handleRequestHireWorker}
+              onViewApplicants={openApplicants}
+              onOpenMyJobs={() => setActiveNavTab('MY_JOBS')}
               loading={loading}
             />
-          )
-        )}
+          ))}
 
-        {/* TAB 2: MY_JOBS (Customer: Posted Jobs / Worker: Applications) */}
+        {/* TAB 2: MY_JOBS (customer: posted jobs / worker: applications) */}
         {activeNavTab === 'MY_JOBS' && (
           <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
             <div>
               <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {currentUser?.role === 'WORKER'
-                  ? (lang === 'hi' ? 'मेरे आवेदन' : 'My Job Applications')
-                  : (lang === 'hi' ? 'मेरे पोस्ट किए गए काम' : 'My Posted Jobs')}
+                {isWorker
+                  ? tr('My Job Applications', 'मेरे आवेदन')
+                  : tr('My Posted Jobs', 'मेरे पोस्ट किए गए काम')}
               </h1>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                {currentUser?.role === 'WORKER'
-                  ? (lang === 'hi' ? 'आपके द्वारा भेजे गए सभी आवेदन और उनकी स्थिति' : 'Track your applications and confirmation status')
-                  : (lang === 'hi' ? 'आपके द्वारा पोस्ट किए गए कार्य और आवेदकों की सूची' : 'Review applicants and manage your active requests')}
+                {isWorker
+                  ? tr('Track your applications and their status', 'आपके सभी आवेदन और उनकी स्थिति')
+                  : tr('Review applicants and manage your active requests', 'आपके द्वारा पोस्ट किए गए कार्य और आवेदकों की सूची')}
               </p>
             </div>
 
-            {currentUser?.role === 'WORKER' ? (
+            {isWorker ? (
               workerApplications.length === 0 ? (
                 <div className="empty-state-view">
                   <Briefcase size={32} className="empty-state-icon" />
-                  <div className="empty-state-title">
-                    {lang === 'hi' ? 'अभी कोई आवेदन नहीं है' : 'No job applications yet'}
-                  </div>
+                  <div className="empty-state-title">{tr('No job applications yet', 'अभी कोई आवेदन नहीं है')}</div>
                   <button
                     type="button"
                     className="btn btn-primary"
                     style={{ marginTop: '8px' }}
                     onClick={() => setActiveNavTab('EXPLORE')}
                   >
-                    {lang === 'hi' ? 'पास के काम देखें →' : 'Browse Nearby Jobs →'}
+                    {tr('Browse Nearby Jobs →', 'पास के काम देखें →')}
                   </button>
                 </div>
               ) : (
-                workerApplications.map((app) => (
-                  <div key={app.id} className="job-item" style={{ backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="job-header-row">
-                      <div>
-                        <div className="job-title">{app.job.title}</div>
-                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{app.job.business.business_name}</div>
+                workerApplications.map((app) => {
+                  const label = APPLICATION_STATUS_LABEL[app.status];
+                  return (
+                    <div
+                      key={app.id}
+                      className="job-item"
+                      style={{ backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}
+                    >
+                      <div className="job-header-row">
+                        <div>
+                          <div className="job-title">{app.job.title}</div>
+                          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                            {app.job.business.business_name}
+                          </div>
+                        </div>
+                        <div className="job-wage">₹{app.job.wage}/{tr('day', 'दिन')}</div>
                       </div>
-                      <div className="job-wage">₹{app.job.wage}/{lang === 'hi' ? 'दिन' : 'day'}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          {app.job.locality} ·{' '}
+                          <strong style={{ color: 'var(--text-primary)' }}>
+                            {label ? tr(label.en, label.hi) : app.status}
+                          </strong>
+                        </div>
+                        {app.status === 'APPLIED' && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            style={{ minHeight: '30px', fontSize: '0.78rem' }}
+                            onClick={() => handleWithdrawJob(app.job.id)}
+                          >
+                            {tr('Withdraw', 'वापस लें')}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      Locality: {app.job.locality} · Status: <strong>{app.status}</strong>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )
+            ) : customerJobs.length === 0 ? (
+              <div className="empty-state-view">
+                <Briefcase size={32} className="empty-state-icon" />
+                <div className="empty-state-title">{tr('No jobs posted yet', 'कोई काम पोस्ट नहीं किया गया है')}</div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ marginTop: '8px' }}
+                  onClick={() => openPostJob(null)}
+                >
+                  {t.postJobButton}
+                </button>
+              </div>
             ) : (
-              customerJobs.length === 0 ? (
-                <div className="empty-state-view">
-                  <Briefcase size={32} className="empty-state-icon" />
-                  <div className="empty-state-title">
-                    {lang === 'hi' ? 'कोई काम पोस्ट नहीं किया गया है' : 'No jobs posted yet'}
+              customerJobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="job-item"
+                  style={{ backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}
+                >
+                  <div className="job-header-row">
+                    <div>
+                      <div className="job-title">{job.title}</div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{job.locality}</div>
+                    </div>
+                    <div className="job-wage">₹{job.wage}/{tr('day', 'दिन')}</div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ marginTop: '8px' }}
-                    onClick={() => setShowPostJobSheet(true)}
-                  >
-                    {t.postJobButton}
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                      {job.applicant_count || 0} {tr('applicants', 'कामगारों ने आवेदन किया')}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ minHeight: '32px', fontSize: '0.78rem' }}
+                      onClick={() => openApplicants(job)}
+                    >
+                      {tr('View Applicants', 'आवेदक देखें')} ({job.applicant_count || 0})
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                customerJobs.map((job) => (
-                  <div key={job.id} className="job-item" style={{ backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="job-header-row">
-                      <div>
-                        <div className="job-title">{job.title}</div>
-                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{job.locality}</div>
-                      </div>
-                      <div className="job-wage">₹{job.wage}/{lang === 'hi' ? 'दिन' : 'day'}</div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                      <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                        {job.applicant_count || 0} {lang === 'hi' ? 'कामगारों ने आवेदन किया' : 'applicants'}
-                      </span>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        style={{ minHeight: '32px', fontSize: '0.78rem' }}
-                        onClick={() => handleViewApplicants(job)}
-                      >
-                        {lang === 'hi' ? 'आवेदक देखें' : 'View Applicants'} ({job.applicant_count || 0})
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )
+              ))
             )}
           </div>
         )}
@@ -699,14 +841,13 @@ export default function KaamSetuApp() {
         {activeNavTab === 'MESSAGES' && (
           <MessagesView
             lang={lang}
-            userRole={currentUser?.role || 'BUSINESS'}
-            coordinations={coordinations}
-            onVerifyOtp={handleVerifyCoordinationOtp}
-            onConfirmFinish={handleConfirmFinish}
-            onOpenRating={(jobId, cId, cName) => {
-              setRatingTarget({ jobId, toUserId: cId, toName: cName, role: currentUser?.role === 'WORKER' ? 'BUSINESS' : 'WORKER' });
-              setShowRatingModal(true);
-            }}
+            items={activeWork}
+            onStartWork={handleStartWork}
+            onConfirmFinish={handleConfirmCompletion}
+            onConfirmPayment={handleConfirmPayment}
+            onOpenRating={(applicationId, counterpartName, counterpartRole) =>
+              openRating({ applicationId, toName: counterpartName, role: counterpartRole })
+            }
           />
         )}
 
@@ -715,7 +856,7 @@ export default function KaamSetuApp() {
           <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
             <div>
               <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {lang === 'hi' ? 'मेरी प्रोफ़ाइल' : 'Account & Profile'}
+                {tr('Account & Profile', 'मेरी प्रोफ़ाइल')}
               </h1>
             </div>
 
@@ -735,96 +876,98 @@ export default function KaamSetuApp() {
                     fontWeight: 800,
                   }}
                 >
-                  {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                  {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : '?'}
                 </div>
 
                 <div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    {currentUser?.name}
+                    {currentUser?.name || tr('Guest', 'अतिथि')}
                   </div>
                   <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                    {currentUser?.role === 'WORKER' ? (lang === 'hi' ? 'कामगार (Worker)' : 'Worker') : (lang === 'hi' ? 'ग्राहक (Customer)' : 'Customer')} · {currentUser?.phone}
+                    {currentUser
+                      ? `${isWorker ? tr('Worker', 'कामगार (Worker)') : tr('Customer', 'ग्राहक (Customer)')} · ${currentUser.phone}`
+                      : tr('Not logged in', 'लॉग इन नहीं है')}
                   </div>
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '16px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                  onClick={handleToggleRole}
-                >
-                  <ArrowLeftRight size={14} />
-                  <span>{lang === 'hi' ? 'भूमिका बदलें' : 'Switch Role'}</span>
-                </button>
+                {currentUser ? (
+                  <>
+                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={handleToggleRole}>
+                      <ArrowLeftRight size={14} />
+                      <span>{tr('Switch Role', 'भूमिका बदलें')}</span>
+                    </button>
 
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ color: 'var(--brand-danger)' }}
-                  onClick={handleLogout}
-                >
-                  <LogOut size={14} />
-                  <span>{lang === 'hi' ? 'लॉगआउट' : 'Sign Out'}</span>
-                </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ color: 'var(--brand-danger)' }}
+                      onClick={handleLogout}
+                    >
+                      <LogOut size={14} />
+                      <span>{tr('Sign Out', 'लॉगआउट')}</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ flex: 1 }}
+                    onClick={() => setShowOnboardingModal(true)}
+                  >
+                    {tr('Log in', 'लॉग इन करें')}
+                  </button>
+                )}
               </div>
             </div>
           </div>
         )}
       </main>
 
-      {/* 4. Fixed Bottom Navigation */}
+      {/* 4. Fixed bottom navigation */}
       <BottomNav
         lang={lang}
         userRole={currentUser?.role}
         activeTab={activeNavTab}
         onSelectTab={setActiveNavTab}
-        myJobsCount={currentUser?.role === 'WORKER' ? workerApplications.length : customerJobs.length}
-        messagesCount={coordinations.length}
+        myJobsCount={isWorker ? workerApplications.length : customerJobs.length}
+        messagesCount={activeWork.length}
       />
 
-      {/* 5. Post Job Wizard */}
+      {/* 5. Post job wizard */}
       <PostJobSheet
         lang={lang}
         isOpen={showPostJobSheet}
         onClose={() => {
           setShowPostJobSheet(false);
-          setPreSelectedWorker(null);
+          setInvitedWorker(null);
         }}
         skillsList={skillsList}
         onSubmit={handlePostJobSubmit}
-        loading={loading}
-        preSelectedSkillId={preSelectedWorker?.skills[0]?.id}
-        preSelectedWorkerName={preSelectedWorker?.name}
+        loading={actionBusy}
         userLocality={userLocation.locality}
-        userCoordinates={userLocation.isLive ? { latitude: userLocation.lat, longitude: userLocation.lng } : null}
+        userCoordinates={{ latitude: userLocation.lat, longitude: userLocation.lng }}
+        invitedWorker={invitedWorker}
       />
 
-      {/* 6. Applicant Review Sheet */}
+      {/* 6. Applicant review sheet */}
       <ApplicantSheet
         lang={lang}
         isOpen={showApplicantSheet}
         onClose={() => {
           setShowApplicantSheet(false);
-          setSelectedJobForApplicants(null);
+          setApplicantJob(null);
+          setApplicants(null);
+          applicantsReqRef.current++;
         }}
-        job={selectedJobForApplicants}
-        applicants={applicantsList}
+        job={applicantJob}
+        applicants={applicants}
         onAcceptWorker={handleAcceptWorker}
-        onRateWorker={(workerId, workerName) => {
-          setRatingTarget({
-            jobId: selectedJobForApplicants?.id || '',
-            toUserId: workerId,
-            toName: workerName,
-            role: 'WORKER',
-          });
-          setShowRatingModal(true);
-        }}
-        loading={loading}
+        onRateWorker={handleRateWorker}
       />
 
-      {/* 7. Rating & Review Modal */}
+      {/* 7. Rating & review modal */}
       <RatingModal
         lang={lang}
         isOpen={showRatingModal}
@@ -837,27 +980,19 @@ export default function KaamSetuApp() {
         comment={ratingComment}
         onChangeComment={setRatingComment}
         onSubmitReview={handleSubmitReview}
-        loading={loading}
+        loading={actionBusy}
       />
 
-      {/* 8. Location Modal */}
+      {/* 8. Location modal */}
       <LocationModal
         isOpen={showLocationModal}
         onClose={() => setShowLocationModal(false)}
         lang={lang}
         currentLocality={userLocation.locality}
-        onSelectLocation={(loc: LocationItem) => {
-          setUserLocation({
-            lat: loc.lat,
-            lng: loc.lng,
-            locality: `${loc.locality}, ${loc.city}`,
-            isLive: loc.locality === 'Current GPS Location',
-          });
-          showNotification(`Location set to ${loc.locality}`);
-        }}
+        onSelectLocation={handleSelectLocation}
       />
 
-      {/* 9. Onboarding / Auth Modal */}
+      {/* 9. Onboarding / auth modal */}
       <OnboardingModal
         isOpen={showOnboardingModal}
         onClose={() => setShowOnboardingModal(false)}

@@ -18,6 +18,7 @@ model User {
 
   workerProfile  WorkerProfile?
   business       Business?
+  otpRequests     OtpRequest[]
   reviewsGiven    Review[]       @relation("ReviewsGiven")
   reviewsReceived Review[]       @relation("ReviewsReceived")
 }
@@ -25,6 +26,7 @@ model User {
 model Skill {
   id        String   @id @default(uuid())
   name      String   @unique
+  slug      String   @unique // stable key used by the client, e.g. "plumber", "hospitality"
   category  String   @default("GENERAL") // "HOSPITALITY", "RETAIL", "LOGISTICS", "MANUAL"
   iconName  String   @default("briefcase")
   createdAt DateTime @default(now())
@@ -101,12 +103,15 @@ model Job {
   locality        String?
   latitude        Float
   longitude       Float
-  status          String   @default("OPEN") // "OPEN" | "FILLED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
+  status          String   @default("OPEN") // see JOB_STATUS in src/lib/status.ts
+  invitedWorkerId String?  // set when the customer hired a specific worker
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   applications Application[]
   reviews      Review[]
+
+  @@index([status, latitude, longitude])
 }
 
 model Application {
@@ -115,13 +120,19 @@ model Application {
   job                        Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
   workerId                   String
   worker                     WorkerProfile @relation(fields: [workerId], references: [userId], onDelete: Cascade)
-  status                     String        @default("APPLIED") // "APPLIED" | "ACCEPTED" | "REJECTED" | "WITHDRAWN"
-  workerConfirmedCompleted   Boolean       @default(false)
-  businessConfirmedCompleted Boolean       @default(false)
+  status                     String        @default("APPLIED") // see APPLICATION_STATUS in src/lib/status.ts
+  arrivalOtp                 String?       // 4-digit code the customer reads out on arrival; only the business can fetch it
+  arrivalOtpAttempts         Int           @default(0)
+  startedAt                  DateTime?
+  workerConfirmedAt          DateTime?
+  businessConfirmedAt        DateTime?
+  completedAt                DateTime?
+  paymentConfirmedAt         DateTime?
   appliedAt                  DateTime      @default(now())
   updatedAt                  DateTime      @updatedAt
 
   @@unique([jobId, workerId])
+  @@index([workerId])
 }
 
 model Review {
@@ -138,4 +149,18 @@ model Review {
   createdAt   DateTime @default(now())
 
   @@unique([jobId, fromUserId, toUserId])
+}
+
+model OtpRequest {
+  id         String    @id @default(uuid())
+  phone      String
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phone, createdAt])
 }

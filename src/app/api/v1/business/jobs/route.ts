@@ -1,158 +1,108 @@
-import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getAuthSession } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { HttpError, handleRouteError, ok, readJson } from '@/lib/http';
+import { JOB_STATUS, MATCHED_STATUSES, APPLICATION_STATUS } from '@/lib/status';
+import { createJobSchema } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
-  try {
-    const session = await getAuthSession(request);
-    const body = await request.json();
-    const businessId = session?.userId || body.businessId;
+const jobInclude = {
+  skill: true,
+  applications: { select: { status: true } },
+} satisfies Prisma.JobInclude;
 
-    if (!businessId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: missing business ID' },
-        { status: 401 }
-      );
-    }
+type JobRow = Prisma.JobGetPayload<{ include: typeof jobInclude }>;
 
-    const {
-      skill_id,
-      title,
-      description,
-      workers_required = 1,
-      wage,
-      food_provided = false,
-      job_date,
-      start_time,
-      end_time,
-      locality,
-      latitude,
-      longitude,
-    } = body;
-
-    if (!skill_id || !wage || !job_date || !start_time || !end_time) {
-      return NextResponse.json(
-        { success: false, error: 'Missing required job parameters' },
-        { status: 400 }
-      );
-    }
-
-    // Get business coordinates if not directly supplied in post
-    let lat = latitude ? parseFloat(latitude) : undefined;
-    let lng = longitude ? parseFloat(longitude) : undefined;
-
-    const business = await prisma.business.findUnique({
-      where: { userId: businessId },
-    });
-
-    if (business) {
-      lat = lat || business.latitude;
-      lng = lng || business.longitude;
-    }
-
-    const job = await prisma.job.create({
-      data: {
-        businessId,
-        skillId: skill_id,
-        title: title || 'Worker Required',
-        description,
-        workersRequired: Number(workers_required),
-        wage: Number(wage),
-        foodProvided: Boolean(food_provided),
-        jobDate: job_date,
-        startTime: start_time,
-        endTime: end_time,
-        locality: locality || business?.locality || 'Local Area',
-        latitude: lat || 31.6375,
-        longitude: lng || 74.8780,
-        status: 'OPEN',
-      },
-      include: {
-        skill: true,
-      },
-    });
-
-    // Increment business jobs_posted count
-    await prisma.business.update({
-      where: { userId: businessId },
-      data: { jobsPosted: { increment: 1 } },
-    });
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Job posted successfully!',
-        job,
-      },
-      { status: 201 }
-    );
-  } catch (error: any) {
-    console.error('Error posting job:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to post job' },
-      { status: 500 }
-    );
-  }
+function formatBusinessJob(job: JobRow) {
+  return {
+    id: job.id,
+    title: job.title,
+    description: job.description,
+    skill_name: job.skill.name,
+    skill_slug: job.skill.slug,
+    wage: job.wage,
+    food_provided: job.foodProvided,
+    job_date: job.jobDate,
+    start_time: job.startTime,
+    end_time: job.endTime,
+    locality: job.locality,
+    latitude: job.latitude,
+    longitude: job.longitude,
+    status: job.status,
+    workers_required: job.workersRequired,
+    workers_accepted: job.workersAccepted,
+    applicant_count: job.applications.filter((a) => a.status === APPLICATION_STATUS.APPLIED).length,
+    accepted_count: job.applications.filter((a) => MATCHED_STATUSES.includes(a.status)).length,
+    invited_worker_id: job.invitedWorkerId,
+  };
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const session = await getAuthSession(request);
-    const { searchParams } = new URL(request.url);
-    const businessId = session?.userId || searchParams.get('business_id');
-
-    if (!businessId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: missing business ID' },
-        { status: 401 }
-      );
-    }
+    const { business } = await requireBusiness();
 
     const jobs = await prisma.job.findMany({
-      where: { businessId },
-      include: {
-        skill: true,
-        applications: {
-          include: {
-            worker: {
-              include: {
-                user: { select: { name: true, phone: true } },
-              },
-            },
-          },
-        },
-      },
+      where: { businessId: business.userId },
+      include: jobInclude,
       orderBy: { createdAt: 'desc' },
     });
 
-    const formatted = jobs.map((job) => ({
-      id: job.id,
-      title: job.title,
-      description: job.description,
-      skill_name: job.skill.name,
-      wage: job.wage,
-      food_provided: job.foodProvided,
-      job_date: job.jobDate,
-      start_time: job.startTime,
-      end_time: job.endTime,
-      locality: job.locality,
-      status: job.status,
-      workers_required: job.workersRequired,
-      workers_accepted: job.workersAccepted,
-      applicant_count: job.applications.length,
-      accepted_count: job.applications.filter((a) => a.status === 'ACCEPTED').length,
-    }));
+    return ok({ jobs: jobs.map(formatBusinessJob) });
+  } catch (err) {
+    return handleRouteError(err, 'business.jobs.list');
+  }
+}
 
-    return NextResponse.json({
-      success: true,
-      jobs: formatted,
+export async function POST(request: Request) {
+  try {
+    const { business } = await requireBusiness();
+    const data = createJobSchema.parse(await readJson(request));
+
+    const job = await prisma.$transaction(async (tx) => {
+      const skill = await tx.skill.findUnique({ where: { id: data.skill_id }, select: { id: true } });
+      if (!skill) throw new HttpError(400, 'UNKNOWN_SKILL', 'Choose a valid type of work');
+
+      const invitedWorkerId = data.invited_worker_id ?? null;
+      if (invitedWorkerId) {
+        const invited = await tx.workerProfile.findUnique({
+          where: { userId: invitedWorkerId },
+          select: { userId: true },
+        });
+        if (!invited) throw new HttpError(400, 'UNKNOWN_WORKER', 'The invited worker was not found');
+      }
+
+      const created = await tx.job.create({
+        data: {
+          businessId: business.userId,
+          skillId: skill.id,
+          title: data.title,
+          description: data.description ?? null,
+          workersRequired: data.workers_required,
+          wage: data.wage,
+          foodProvided: data.food_provided,
+          jobDate: data.job_date,
+          startTime: data.start_time,
+          endTime: data.end_time,
+          locality: data.locality,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          status: JOB_STATUS.OPEN,
+          invitedWorkerId,
+        },
+        include: jobInclude,
+      });
+
+      await tx.business.update({
+        where: { userId: business.userId },
+        data: { jobsPosted: { increment: 1 } },
+      });
+
+      return created;
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch business jobs' },
-      { status: 500 }
-    );
+
+    return ok({ job: formatBusinessJob(job) }, 201);
+  } catch (err) {
+    return handleRouteError(err, 'business.jobs.create');
   }
 }

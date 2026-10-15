@@ -1,43 +1,23 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getAuthSession } from '@/lib/auth';
+import { requireWorker } from '@/lib/auth';
+import { handleRouteError, ok, readJson } from '@/lib/http';
+import { availabilitySchema } from '@/lib/validation';
+
+export const dynamic = 'force-dynamic';
 
 export async function PUT(request: Request) {
   try {
-    const session = await getAuthSession(request);
-    const body = await request.json();
-    const userId = session?.userId || body.userId;
-
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: missing user session' },
-        { status: 401 }
-      );
-    }
-
-    const { availability } = body;
-    const validStatuses = ['AVAILABLE_TODAY', 'AVAILABLE_TOMORROW', 'UNAVAILABLE'];
-
-    if (!validStatuses.includes(availability)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid availability status' },
-        { status: 400 }
-      );
-    }
+    const { worker } = await requireWorker();
+    const { availability } = availabilitySchema.parse(await readJson(request));
 
     const updated = await prisma.workerProfile.update({
-      where: { userId },
+      where: { userId: worker.userId },
       data: { availability },
+      select: { availability: true },
     });
 
-    return NextResponse.json({
-      success: true,
-      availability: updated.availability,
-    });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update availability' },
-      { status: 500 }
-    );
+    return ok({ availability: updated.availability });
+  } catch (err) {
+    return handleRouteError(err, 'worker.availability.update');
   }
 }

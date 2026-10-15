@@ -1,88 +1,66 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { calculateDistanceKm } from '@/lib/geo';
+import { getCurrentUser } from '@/lib/auth';
+import { handleRouteError, ok } from '@/lib/http';
+import { approximateCoord, boundingBox, calculateDistanceKm } from '@/lib/geo';
+import { nearbyQuerySchema, queryToObject } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
+const MAX_RESULTS = 200;
+
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const query = nearbyQuerySchema.parse(queryToObject(new URL(request.url).searchParams));
+    const me = await getCurrentUser();
+    const box = boundingBox(query.lat, query.lng, query.max_distance);
 
-    const latParam = searchParams.get('lat');
-    const lngParam = searchParams.get('lng');
-    const skillId = searchParams.get('skill_id');
-    const maxDistParam = searchParams.get('max_distance') || '15.0';
-
-    // Default to Amritsar Center if lat/long not supplied
-    const customerLat = latParam ? parseFloat(latParam) : 31.634;
-    const customerLng = lngParam ? parseFloat(lngParam) : 74.8723;
-    const maxDistance = parseFloat(maxDistParam);
-
-    // Fetch active workers
     const workers = await prisma.workerProfile.findMany({
-      include: {
-        user: {
-          select: { name: true, phone: true },
-        },
-        skills: {
-          include: { skill: true },
-        },
+      where: {
+        user: { isActive: true, ...(me ? { id: { not: me.id } } : {}) },
+        latitude: { gte: box.minLat, lte: box.maxLat },
+        longitude: { gte: box.minLng, lte: box.maxLng },
+        ...(query.skill_id ? { skills: { some: { skillId: query.skill_id } } } : {}),
       },
+      include: {
+        user: { select: { name: true } },
+        skills: { include: { skill: true } },
+      },
+      take: MAX_RESULTS,
     });
 
     const nearbyWorkers = workers
-      .map((w) => {
-        const distanceKm = calculateDistanceKm(
-          customerLat,
-          customerLng,
-          w.latitude,
-          w.longitude
-        );
-
-        return {
-          id: w.userId,
-          name: w.user.name,
-          city: w.city,
-          locality: w.locality || 'Amritsar',
-          experience_years: w.experienceYears,
-          expected_wage: w.expectedWage,
-          availability: w.availability,
-          rating: w.rating,
-          rating_count: w.ratingCount,
-          jobs_completed: w.jobsCompleted,
-          attendance_rate: w.attendanceRate,
-          distance_km: distanceKm,
-          skills: w.skills.map((s) => ({
-            id: s.skill.id,
-            name: s.skill.name,
-            category: s.skill.category,
-          })),
-        };
-      })
-      .filter((w) => {
-        const withinDistance = w.distance_km <= maxDistance;
-        const matchesSkill = skillId
-          ? w.skills.some((s) => s.id === skillId)
-          : true;
-        return withinDistance && matchesSkill;
-      })
+      .map((w) => ({
+        id: w.userId,
+        name: w.user.name,
+        city: w.city,
+        locality: w.locality,
+        experience_years: w.experienceYears,
+        expected_wage: w.expectedWage,
+        availability: w.availability,
+        rating: w.rating,
+        rating_count: w.ratingCount,
+        jobs_completed: w.jobsCompleted,
+        distance_km: calculateDistanceKm(query.lat, query.lng, w.latitude, w.longitude),
+        latitude: approximateCoord(w.latitude),
+        longitude: approximateCoord(w.longitude),
+        skills: w.skills.map((s) => ({
+          id: s.skill.id,
+          name: s.skill.name,
+          slug: s.skill.slug,
+          category: s.skill.category,
+        })),
+      }))
+      .filter((w) => w.distance_km <= query.max_distance)
       .sort((a, b) => {
-        // Available workers first, then distance ascending, then rating descending
-        if (a.availability.startsWith('AVAILABLE') && !b.availability.startsWith('AVAILABLE')) return -1;
-        if (!a.availability.startsWith('AVAILABLE') && b.availability.startsWith('AVAILABLE')) return 1;
+        // Available workers first, then distance ascending, then rating descending.
+        const aAvail = a.availability.startsWith('AVAILABLE');
+        const bAvail = b.availability.startsWith('AVAILABLE');
+        if (aAvail !== bAvail) return aAvail ? -1 : 1;
         return a.distance_km - b.distance_km || b.rating - a.rating;
       });
 
-    return NextResponse.json({
-      success: true,
-      count: nearbyWorkers.length,
-      workers: nearbyWorkers,
-    });
-  } catch (error: any) {
-    console.error('Error in nearby workers API:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch nearby workers' },
-      { status: 500 }
-    );
+    return ok({ count: nearbyWorkers.length, workers: nearbyWorkers });
+  } catch (err) {
+    return handleRouteError(err, 'workers.nearby');
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Wrench,
   Zap,
@@ -15,25 +15,31 @@ import {
   X,
   UserX,
   Star,
-  MapPin,
-  ShieldCheck,
   Briefcase,
   ChevronRight,
   ClipboardList,
 } from 'lucide-react';
 import { Language, translations } from '@/lib/translations';
-import { WorkerCard, NearbyWorker } from './WorkerCard';
+import { JOB_STATUS } from '@/lib/status';
+import {
+  WorkerCard,
+  NearbyWorker,
+  isRated,
+  formatRatingText,
+  getNewWorkerLabel,
+  getAvailabilityInfo,
+} from './WorkerCard';
 import { WorkerProfileSheet } from './WorkerProfileSheet';
 import { GoogleMap, MapMarkerItem } from '@/components/map/GoogleMap';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 
-interface Skill {
+export interface CustomerHomeSkill {
   id: string;
   name: string;
   category: string;
 }
 
-interface CustomerJob {
+export interface CustomerJob {
   id: string;
   title: string;
   description: string;
@@ -51,9 +57,9 @@ interface CustomerJob {
   accepted_count: number;
 }
 
-interface CustomerHomeProps {
+export interface CustomerHomeProps {
   lang: Language;
-  skillsList: Skill[];
+  skillsList: CustomerHomeSkill[];
   workers: NearbyWorker[];
   customerJobs: CustomerJob[];
   userLocation?: {
@@ -65,6 +71,8 @@ interface CustomerHomeProps {
   onOpenPostJob: () => void;
   onRequestHireWorker: (worker: NearbyWorker) => void;
   onViewApplicants: (job: CustomerJob) => void;
+  /** Switches the parent to the My Jobs view. Falls back to the first active job's applicants when omitted. */
+  onOpenMyJobs?: () => void;
   loading: boolean;
 }
 
@@ -87,15 +95,24 @@ const CATEGORY_CHIPS: CategoryFilter[] = [
   { key: 'cook', nameEn: 'Cook & Kitchen', nameHi: 'रसोइया', icon: <Utensils size={14} />, matchPattern: 'restaurant' },
 ];
 
+/** Jobs that still need the customer's attention. */
+const ACTIVE_JOB_STATUSES: readonly string[] = [
+  JOB_STATUS.OPEN,
+  JOB_STATUS.FILLED,
+  JOB_STATUS.IN_PROGRESS,
+];
+
+const DEFAULT_LOCATION = { lat: 31.6340, lng: 74.8723, locality: 'Amritsar', isLive: false };
+
 export const CustomerHome: React.FC<CustomerHomeProps> = ({
   lang,
-  skillsList,
   workers,
   customerJobs,
-  userLocation = { lat: 31.6340, lng: 74.8723, locality: 'Amritsar', isLive: false },
+  userLocation = DEFAULT_LOCATION,
   onOpenPostJob,
   onRequestHireWorker,
   onViewApplicants,
+  onOpenMyJobs,
   loading,
 }) => {
   const t = translations[lang];
@@ -109,49 +126,68 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
   const [previewWorker, setPreviewWorker] = useState<NearbyWorker | null>(null);
   const [selectedWorkerForProfile, setSelectedWorkerForProfile] = useState<NearbyWorker | null>(null);
 
+  const { lat: userLat, lng: userLng } = userLocation;
+  const mapCenter = useMemo(() => ({ lat: userLat, lng: userLng }), [userLat, userLng]);
+
   // Filter workers based on search and category
-  const filteredWorkers = workers.filter((w) => {
+  const filteredWorkers = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    const matchesSearch =
-      query === '' ||
-      w.name.toLowerCase().includes(query) ||
-      (w.locality && w.locality.toLowerCase().includes(query)) ||
-      w.skills.some((s) => s.name.toLowerCase().includes(query));
-
-    if (selectedCategoryKey === 'all') return matchesSearch;
-
     const cat = CATEGORY_CHIPS.find((c) => c.key === selectedCategoryKey);
-    const matchesCategory = cat
-      ? w.skills.some((s) => s.name.toLowerCase().includes(cat.matchPattern))
-      : true;
 
-    return matchesSearch && matchesCategory;
-  });
+    return workers.filter((w) => {
+      const matchesSearch =
+        query === '' ||
+        w.name.toLowerCase().includes(query) ||
+        (w.locality && w.locality.toLowerCase().includes(query)) ||
+        w.skills.some((s) => s.name.toLowerCase().includes(query));
 
-  // Convert workers to Google Map markers
-  const mapMarkers: MapMarkerItem[] = filteredWorkers.map((w, idx) => {
-    // Distribute around center if coordinates are clustered
-    const offsetLat = (idx % 3 - 1) * 0.0035;
-    const offsetLng = (Math.floor(idx / 3) % 3 - 1) * 0.0035;
-    return {
-      id: w.id,
-      lat: userLocation.lat + offsetLat,
-      lng: userLocation.lng + offsetLng,
-      title: w.name,
-      priceLabel: `₹${w.expected_wage}`,
-      rating: w.rating,
-      subtitle: w.skills[0]?.name || 'Worker',
-      raw: w,
-    };
-  });
+      if (selectedCategoryKey === 'all' || !cat) return matchesSearch;
 
-  const handleSelectMapMarker = (marker: MapMarkerItem) => {
-    if (marker.raw) {
-      setPreviewWorker(marker.raw);
+      const matchesCategory = w.skills.some((s) => s.name.toLowerCase().includes(cat.matchPattern));
+      return matchesSearch && matchesCategory;
+    });
+  }, [workers, searchQuery, selectedCategoryKey]);
+
+  // Real coordinates only. Workers without a position are left off the map.
+  const mapMarkers = useMemo<MapMarkerItem[]>(() => {
+    const markers: MapMarkerItem[] = [];
+    for (const w of filteredWorkers) {
+      const lat = w.latitude;
+      const lng = w.longitude;
+      if (lat === null || lng === null) continue;
+      markers.push({
+        id: w.id,
+        lat,
+        lng,
+        title: w.name,
+        priceLabel: `₹${w.expected_wage}`,
+        rating: isRated(w) ? w.rating : undefined,
+        subtitle: w.skills[0]?.name || 'Worker',
+        raw: w,
+      });
     }
-  };
+    return markers;
+  }, [filteredWorkers]);
 
-  const totalApplicants = customerJobs.reduce((acc, j) => acc + (j.applicant_count || 0), 0);
+  const handleSelectMapMarker = useCallback((marker: MapMarkerItem) => {
+    const worker = marker.raw as NearbyWorker | undefined;
+    if (worker) setPreviewWorker(worker);
+  }, []);
+
+  const handleViewProfile = useCallback((worker: NearbyWorker) => {
+    setSelectedWorkerForProfile(worker);
+  }, []);
+
+  const activeJobs = useMemo(
+    () => customerJobs.filter((j) => ACTIVE_JOB_STATUSES.includes(j.status)),
+    [customerJobs]
+  );
+  const totalApplicants = useMemo(
+    () => activeJobs.reduce((acc, j) => acc + (j.applicant_count || 0), 0),
+    [activeJobs]
+  );
+
+  const previewAvailability = previewWorker ? getAvailabilityInfo(previewWorker.availability, lang) : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -172,6 +208,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
             <button
               type="button"
               onClick={() => setSearchQuery('')}
+              aria-label={lang === 'hi' ? 'खोज साफ़ करें' : 'Clear search'}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
             >
               <X size={16} />
@@ -198,13 +235,24 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
         })}
       </div>
 
-      {/* 3. Active Work Requests Alert (If any open jobs) */}
-      {customerJobs.length > 0 && (
-        <div
-          onClick={() => onViewApplicants(customerJobs[0])}
+      {/* 3. Active Work Requests Alert (only while jobs are open or in progress) */}
+      {activeJobs.length > 0 && (
+        <button
+          type="button"
+          onClick={() => {
+            if (onOpenMyJobs) {
+              onOpenMyJobs();
+            } else {
+              onViewApplicants(activeJobs[0]);
+            }
+          }}
           style={{
             margin: '10px 16px 0 16px',
             padding: '10px 14px',
+            width: 'calc(100% - 32px)',
+            font: 'inherit',
+            color: 'inherit',
+            textAlign: 'left',
             backgroundColor: 'var(--bg-subtle)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
@@ -218,7 +266,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
             <ClipboardList size={18} color="var(--brand-success)" />
             <div>
               <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {customerJobs.length} {lang === 'hi' ? 'सक्रिय काम की मांग' : 'Active Work Request(s)'}
+                {activeJobs.length} {lang === 'hi' ? 'सक्रिय काम की मांग' : 'Active Work Request(s)'}
               </div>
               <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
                 {totalApplicants > 0
@@ -228,7 +276,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
             </div>
           </div>
           <ChevronRight size={16} color="var(--text-muted)" />
-        </div>
+        </button>
       )}
 
       {/* 4. Map & List Mode Control Bar */}
@@ -265,7 +313,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {/* Interactive Google Map with custom price markers */}
           <GoogleMap
-            center={{ lat: userLocation.lat, lng: userLocation.lng }}
+            center={mapCenter}
             markers={mapMarkers}
             selectedMarkerId={previewWorker?.id}
             onSelectMarker={handleSelectMapMarker}
@@ -317,7 +365,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
                   lang={lang}
                   worker={w}
                   onRequestHire={onRequestHireWorker}
-                  onViewProfile={(worker) => setSelectedWorkerForProfile(worker)}
+                  onViewProfile={handleViewProfile}
                 />
               ))
             )}
@@ -361,7 +409,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
                 lang={lang}
                 worker={w}
                 onRequestHire={onRequestHireWorker}
-                onViewProfile={(worker) => setSelectedWorkerForProfile(worker)}
+                onViewProfile={handleViewProfile}
               />
             ))
           )}
@@ -372,8 +420,8 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
       <BottomSheet
         isOpen={Boolean(previewWorker)}
         onClose={() => setPreviewWorker(null)}
-        title={previewWorker?.name || 'Worker Preview'}
-        subtitle={previewWorker?.locality ? `${previewWorker.locality} · ${previewWorker.distance_km} km away` : 'Nearby Worker'}
+        title={previewWorker?.name || (lang === 'hi' ? 'कामगार' : 'Worker Preview')}
+        subtitle={previewWorker?.locality ? `${previewWorker.locality} · ${previewWorker.distance_km} km away` : (lang === 'hi' ? 'पास का कामगार' : 'Nearby Worker')}
         footer={
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
             <button
@@ -402,31 +450,32 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
           </div>
         }
       >
-        {previewWorker && (
+        {previewWorker && previewAvailability && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {previewWorker.skills[0]?.name || 'Worker'}
-                </span>
-                <ShieldCheck size={16} color="var(--brand-success)" />
-              </div>
+              <span style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {previewWorker.skills[0]?.name || (lang === 'hi' ? 'कामगार' : 'Worker')}
+              </span>
 
               <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
                 ₹{previewWorker.expected_wage}/{lang === 'hi' ? 'दिन' : 'day'}
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '14px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                <Star size={13} fill="#f59e0b" color="#f59e0b" />
-                {previewWorker.rating} ({previewWorker.jobs_completed} {lang === 'hi' ? 'काम' : 'jobs'})
-              </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              {isRated(previewWorker) ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <Star size={13} fill="#f59e0b" color="#f59e0b" />
+                  {formatRatingText(previewWorker)}
+                </span>
+              ) : (
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{getNewWorkerLabel(lang)}</span>
+              )}
               <span>·</span>
-              <span>{previewWorker.distance_km} km away</span>
+              <span>{previewWorker.distance_km} km</span>
               <span>·</span>
-              <span style={{ color: 'var(--brand-success)', fontWeight: 600 }}>
-                {lang === 'hi' ? 'आज उपलब्ध' : 'Available Today'}
+              <span style={{ color: previewAvailability.color, fontWeight: 600 }}>
+                {previewAvailability.label}
               </span>
             </div>
           </div>

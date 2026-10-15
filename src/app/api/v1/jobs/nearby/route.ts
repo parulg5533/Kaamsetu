@@ -1,103 +1,86 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { calculateDistanceKm } from '@/lib/geo';
-import { getAuthSession } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
+import { handleRouteError, ok } from '@/lib/http';
+import { boundingBox, calculateDistanceKm } from '@/lib/geo';
+import { JOB_STATUS } from '@/lib/status';
+import { nearbyQuerySchema, queryToObject } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const session = await getAuthSession(request);
+    const query = nearbyQuerySchema.parse(queryToObject(new URL(request.url).searchParams));
+    const me = await getCurrentUser();
+    const box = boundingBox(query.lat, query.lng, query.max_distance);
 
-    const latParam = searchParams.get('lat');
-    const lngParam = searchParams.get('lng');
-    const maxDistParam = searchParams.get('max_distance') || '10.0';
-    const workerId = searchParams.get('worker_id') || session?.userId;
-
-    // Default to Amritsar Center if lat/long not supplied
-    const workerLat = latParam ? parseFloat(latParam) : 31.634;
-    const workerLng = lngParam ? parseFloat(lngParam) : 74.8723;
-    const maxDistance = parseFloat(maxDistParam);
-
-    // Fetch all active OPEN jobs
     const jobs = await prisma.job.findMany({
       where: {
-        status: 'OPEN',
+        latitude: { gte: box.minLat, lte: box.maxLat },
+        longitude: { gte: box.minLng, lte: box.maxLng },
+        ...(query.skill_id ? { skillId: query.skill_id } : {}),
+        // Never show a customer their own jobs.
+        ...(me ? { businessId: { not: me.id } } : {}),
+        // Direct-hire jobs are only offered to the invited worker.
+        AND: [{ OR: [{ invitedWorkerId: null }, ...(me ? [{ invitedWorkerId: me.id }] : [])] }],
+        OR: [
+          { status: JOB_STATUS.OPEN },
+          // Keep jobs the caller already applied to, so they can still track them.
+          ...(me ? [{ applications: { some: { workerId: me.id } } }] : []),
+        ],
       },
-      include: {
-        skill: true,
-        business: {
-          include: {
-            user: { select: { name: true, phone: true } },
-          },
-        },
-        applications: workerId
-          ? {
-              where: { workerId },
-            }
-          : false,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      include: { skill: true, business: true },
+      orderBy: { createdAt: 'desc' },
     });
 
-    // Compute distance for each job, filter by distance, and format response
+    const myApplications = new Map<string, { id: string; status: string }>();
+    if (me && jobs.length > 0) {
+      const apps = await prisma.application.findMany({
+        where: { workerId: me.id, jobId: { in: jobs.map((j) => j.id) } },
+        select: { id: true, jobId: true, status: true },
+      });
+      for (const app of apps) myApplications.set(app.jobId, { id: app.id, status: app.status });
+    }
+
     const nearbyJobs = jobs
-      .map((job: any) => {
-        const distanceKm = calculateDistanceKm(
-          workerLat,
-          workerLng,
-          job.latitude,
-          job.longitude
-        );
-
-        const application =
-          Array.isArray(job.applications) && job.applications.length > 0
-            ? job.applications[0]
-            : null;
-
+      .map((job) => {
+        const application = myApplications.get(job.id) ?? null;
         return {
           id: job.id,
           title: job.title,
           description: job.description,
+          skill_id: job.skillId,
           skill_name: job.skill.name,
-          skill_id: job.skill.id,
+          skill_slug: job.skill.slug,
           wage: job.wage,
           food_provided: job.foodProvided,
           job_date: job.jobDate,
           start_time: job.startTime,
           end_time: job.endTime,
           locality: job.locality,
+          latitude: job.latitude,
+          longitude: job.longitude,
           workers_required: job.workersRequired,
           workers_accepted: job.workersAccepted,
-          distance_km: distanceKm,
+          distance_km: calculateDistanceKm(query.lat, query.lng, job.latitude, job.longitude),
+          is_invited: !!me && job.invitedWorkerId === me.id,
           business: {
             id: job.business.userId,
             business_name: job.business.businessName,
             business_type: job.business.businessType,
             locality: job.business.locality,
             rating: job.business.rating,
+            rating_count: job.business.ratingCount,
             jobs_completed: job.business.jobsCompleted,
           },
           my_application_status: application ? application.status : null,
           application_id: application ? application.id : null,
         };
       })
-      .filter((job: any) => job.distance_km <= maxDistance)
-      .sort((a: any, b: any) => a.distance_km - b.distance_km || b.wage - a.wage);
+      .filter((job) => job.distance_km <= query.max_distance)
+      .sort((a, b) => a.distance_km - b.distance_km || b.wage - a.wage);
 
-    return NextResponse.json({
-      success: true,
-      count: nearbyJobs.length,
-      jobs: nearbyJobs,
-    });
-  } catch (error: any) {
-    console.error('Error in nearby jobs:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch nearby jobs' },
-      { status: 500 }
-    );
+    return ok({ count: nearbyJobs.length, jobs: nearbyJobs });
+  } catch (err) {
+    return handleRouteError(err, 'jobs.nearby');
   }
 }

@@ -3,8 +3,6 @@
 import React from 'react';
 import {
   Star,
-  MapPin,
-  ShieldCheck,
   Zap,
   Wrench,
   Sparkles,
@@ -14,7 +12,14 @@ import {
   Utensils,
   Briefcase,
 } from 'lucide-react';
-import { Language, translations } from '@/lib/translations';
+import { Language } from '@/lib/translations';
+
+export interface WorkerSkill {
+  id: string;
+  name: string;
+  slug: string;
+  category?: string;
+}
 
 export interface NearbyWorker {
   id: string;
@@ -27,9 +32,10 @@ export interface NearbyWorker {
   rating: number;
   rating_count: number;
   jobs_completed: number;
-  attendance_rate: number;
   distance_km: number;
-  skills: Array<{ id: string; name: string; category?: string }>;
+  latitude: number | null;
+  longitude: number | null;
+  skills: WorkerSkill[];
 }
 
 interface WorkerCardProps {
@@ -39,9 +45,41 @@ interface WorkerCardProps {
   onViewProfile?: (worker: NearbyWorker) => void;
 }
 
+/** A worker is "rated" only once at least one review exists. */
+export const isRated = (worker: Pick<NearbyWorker, 'rating_count'>): boolean => worker.rating_count >= 1;
+
+/** `4.5 (12)` for rated workers. Callers render the neutral "New" label when `isRated` is false. */
+export const formatRatingText = (worker: Pick<NearbyWorker, 'rating' | 'rating_count'>): string =>
+  `${worker.rating.toFixed(1)} (${worker.rating_count})`;
+
+export const getNewWorkerLabel = (lang: Language): string => (lang === 'hi' ? 'नया' : 'New');
+
+/** Real availability from the API. Unknown values fall back to "Unavailable". */
+export const getAvailabilityInfo = (
+  availability: string,
+  lang: Language
+): { label: string; color: string } => {
+  if (availability === 'AVAILABLE_TODAY') {
+    return {
+      label: lang === 'hi' ? 'आज उपलब्ध' : 'Available today',
+      color: 'var(--brand-success)',
+    };
+  }
+  if (availability === 'AVAILABLE_TOMORROW') {
+    return {
+      label: lang === 'hi' ? 'कल उपलब्ध' : 'Available tomorrow',
+      color: 'var(--brand-accent)',
+    };
+  }
+  return {
+    label: lang === 'hi' ? 'अभी उपलब्ध नहीं' : 'Unavailable',
+    color: 'var(--text-muted)',
+  };
+};
+
 // Map trade skill to professional Lucide icon and clean label
 export const getWorkerTradeDetails = (
-  skills: Array<{ id: string; name: string; category?: string }>,
+  skills: WorkerSkill[],
   lang: Language
 ) => {
   if (!skills || skills.length === 0) {
@@ -96,17 +134,26 @@ export const WorkerCard: React.FC<WorkerCardProps> = ({
   onRequestHire,
   onViewProfile,
 }) => {
-  const t = translations[lang];
   const trade = getWorkerTradeDetails(worker.skills, lang);
 
   return (
-    <div
-      className="worker-item"
-      onClick={() => (onViewProfile ? onViewProfile(worker) : onRequestHire(worker))}
-      role="button"
-      tabIndex={0}
-    >
-      <div className="worker-item-left">
+    <div className="worker-item">
+      <button
+        type="button"
+        className="worker-item-left"
+        onClick={() => (onViewProfile ? onViewProfile(worker) : onRequestHire(worker))}
+        style={{
+          background: 'none',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          font: 'inherit',
+          color: 'inherit',
+          textAlign: 'left',
+          cursor: 'pointer',
+          minWidth: 0,
+        }}
+      >
         {/* Avatar */}
         <div className="worker-avatar-wrap">
           {worker.name ? worker.name.charAt(0).toUpperCase() : 'W'}
@@ -116,9 +163,6 @@ export const WorkerCard: React.FC<WorkerCardProps> = ({
         <div className="worker-info">
           <div className="worker-title-row">
             <span className="worker-name">{worker.name}</span>
-            <span title="Verified Worker" className="verified-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
-              <ShieldCheck size={14} />
-            </span>
           </div>
 
           <div className="worker-trade-label" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
@@ -127,18 +171,15 @@ export const WorkerCard: React.FC<WorkerCardProps> = ({
           </div>
 
           <div className="worker-meta-line">
-            {worker.rating > 0 && (
-              <>
-                <span className="worker-rating-badge">
-                  <Star size={11} fill="#f59e0b" color="#f59e0b" className="worker-rating-star" />
-                  <span>{worker.rating.toFixed(1)}</span>
-                </span>
-                {worker.jobs_completed > 0 && (
-                  <span>({worker.jobs_completed} {lang === 'hi' ? 'काम' : 'jobs'})</span>
-                )}
-                <span>·</span>
-              </>
+            {isRated(worker) ? (
+              <span className="worker-rating-badge">
+                <Star size={11} fill="#f59e0b" color="#f59e0b" className="worker-rating-star" />
+                <span>{formatRatingText(worker)}</span>
+              </span>
+            ) : (
+              <span style={{ fontWeight: 600 }}>{getNewWorkerLabel(lang)}</span>
             )}
+            <span>·</span>
 
             <span>{worker.distance_km} km</span>
             {worker.locality && (
@@ -149,7 +190,7 @@ export const WorkerCard: React.FC<WorkerCardProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </button>
 
       {/* Right Column: Wage + Single Primary CTA */}
       <div className="worker-item-right">
@@ -161,10 +202,7 @@ export const WorkerCard: React.FC<WorkerCardProps> = ({
         <button
           type="button"
           className="btn btn-primary btn-hire"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestHire(worker);
-          }}
+          onClick={() => onRequestHire(worker)}
         >
           {lang === 'hi' ? 'हायर करें' : 'Hire'}
         </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useId } from 'react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -12,7 +12,10 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ label, helperText, error, leftIcon, rightIcon, className = '', id, ...props }, ref) => {
-    const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+    const generatedId = useId();
+    const inputId = id || generatedId;
+    const messageId = `${inputId}-message`;
+    const message = error || helperText;
 
     return (
       <div className="ui-field-group">
@@ -23,13 +26,20 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         )}
         <div className={`ui-input-container ${error ? 'ui-input-error' : ''}`}>
           {leftIcon && <span className="ui-input-icon left">{leftIcon}</span>}
-          <input id={inputId} ref={ref} className={`ui-input ${className}`} {...props} />
+          <input
+            id={inputId}
+            ref={ref}
+            className={`ui-input ${className}`}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={message ? messageId : undefined}
+            {...props}
+          />
           {rightIcon && <span className="ui-input-icon right">{rightIcon}</span>}
         </div>
         {error ? (
-          <p className="ui-field-error">{error}</p>
+          <p id={messageId} className="ui-field-error">{error}</p>
         ) : helperText ? (
-          <p className="ui-field-helper">{helperText}</p>
+          <p id={messageId} className="ui-field-helper">{helperText}</p>
         ) : null}
       </div>
     );
